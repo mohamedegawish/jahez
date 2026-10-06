@@ -15,6 +15,7 @@ use App\Http\Controllers\Api\V1\FactoryApprovalController;
 use App\Http\Controllers\Api\V1\FactoryAssessmentController;
 use App\Http\Controllers\Api\V1\FactoryChangeRequestController;
 use App\Http\Controllers\Api\V1\FactoryController;
+use App\Http\Controllers\Api\V1\FactoryServiceEligibilityController;
 use App\Http\Controllers\Api\V1\FinancialPolicyController;
 use App\Http\Controllers\Api\V1\FinancialPolicyVersionController;
 use App\Http\Controllers\Api\V1\HealthController;
@@ -35,19 +36,25 @@ use App\Http\Controllers\Api\V1\ProviderRequestController;
 use App\Http\Controllers\Api\V1\PublicAnnouncementController;
 use App\Http\Controllers\Api\V1\ReadinessAnalyticsController;
 use App\Http\Controllers\Api\V1\ReadinessAssessmentController;
+use App\Http\Controllers\Api\V1\ReadinessLevelServiceController;
 use App\Http\Controllers\Api\V1\ReadinessQuestionnaireController;
 use App\Http\Controllers\Api\V1\ReadinessQuestionnaireVersionController;
 use App\Http\Controllers\Api\V1\ReferenceDataController;
 use App\Http\Controllers\Api\V1\RegistrationController;
 use App\Http\Controllers\Api\V1\ReviewSummaryController;
+use App\Http\Controllers\Api\V1\ServiceCartController;
 use App\Http\Controllers\Api\V1\ServiceCategoryController;
 use App\Http\Controllers\Api\V1\ServiceListingController;
+use App\Http\Controllers\Api\V1\ServiceListingPackageController;
 use App\Http\Controllers\Api\V1\ServiceListingReviewController;
 use App\Http\Controllers\Api\V1\ServicePromotionController;
 use App\Http\Controllers\Api\V1\ServiceProviderApprovalController;
 use App\Http\Controllers\Api\V1\ServiceProviderController;
 use App\Http\Controllers\Api\V1\ServiceProviderReviewRequestController;
 use App\Http\Controllers\Api\V1\ServiceRequestController;
+use App\Http\Controllers\Api\V1\TransformationPlanController;
+use App\Http\Controllers\Api\V1\TransformationPlanItemController;
+use App\Http\Controllers\Api\V1\TransformationPlanVersionController;
 use App\Http\Controllers\Api\V1\UserController;
 use Illuminate\Support\Facades\Route;
 
@@ -354,9 +361,77 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
         Route::post('service-providers/{serviceProvider}/services/{catalogService}/resubmit', [ServiceListingReviewController::class, 'resubmit'])
             ->whereNumber(['serviceProvider', 'catalogService'])
             ->name('service-providers.services.resubmit');
+
+        // Listing packages and the factory cart (ADR-027).
+        Route::put('service-providers/{serviceProvider}/services/{catalogService}/packages', [ServiceListingPackageController::class, 'update'])
+            ->whereNumber(['serviceProvider', 'catalogService'])
+            ->name('service-providers.services.packages.update');
+        Route::get('cart', [ServiceCartController::class, 'index'])->name('cart.index');
+        Route::delete('cart', [ServiceCartController::class, 'clear'])->name('cart.clear');
+        Route::post('cart/items', [ServiceCartController::class, 'store'])->name('cart.items.store');
+        Route::patch('cart/items/{serviceCartItem}', [ServiceCartController::class, 'update'])->whereNumber('serviceCartItem')->name('cart.items.update');
+        Route::delete('cart/items/{serviceCartItem}', [ServiceCartController::class, 'destroy'])->whereNumber('serviceCartItem')->name('cart.items.destroy');
+        Route::post('cart/checkout', [ServiceRequestController::class, 'checkout'])->name('cart.checkout');
         Route::get('readiness-assessments', [ReadinessAnalyticsController::class, 'index'])->name('readiness-assessments.index');
         Route::get('readiness-analytics', [ReadinessAnalyticsController::class, 'summary'])->name('readiness-analytics');
         Route::get('review-summary', ReviewSummaryController::class)->name('review-summary');
+
+        // Readiness-based service eligibility and transformation plans (ADR-025).
+        // The level is a readiness category code; record ids are whole numbers.
+        Route::get('readiness-levels', [ReadinessLevelServiceController::class, 'index'])->name('readiness-levels.index');
+        Route::put('readiness-levels/{level}/services/{catalogService}', [ReadinessLevelServiceController::class, 'update'])
+            ->whereIn('level', ['b4_automation', 'basic', 'advanced', 'smart'])
+            ->whereNumber('catalogService')
+            ->name('readiness-levels.services.update');
+        Route::delete('readiness-levels/{level}/services/{catalogService}', [ReadinessLevelServiceController::class, 'destroy'])
+            ->whereIn('level', ['b4_automation', 'basic', 'advanced', 'smart'])
+            ->whereNumber('catalogService')
+            ->name('readiness-levels.services.destroy');
+        Route::get('factories/{factory}/service-eligibility', [FactoryServiceEligibilityController::class, 'show'])
+            ->whereNumber('factory')
+            ->name('factories.service-eligibility.show');
+        Route::get('factories/{factory}/service-eligibility/{catalogService}/providers', [FactoryServiceEligibilityController::class, 'providers'])
+            ->whereNumber(['factory', 'catalogService'])
+            ->name('factories.service-eligibility.providers');
+
+        Route::get('transformation-plans', [TransformationPlanController::class, 'index'])->name('transformation-plans.index');
+        Route::post('factories/{factory}/transformation-plans', [TransformationPlanController::class, 'store'])
+            ->whereNumber('factory')
+            ->name('factories.transformation-plans.store');
+        Route::get('transformation-plans/{transformationPlan}', [TransformationPlanController::class, 'show'])
+            ->whereNumber('transformationPlan')
+            ->name('transformation-plans.show');
+        Route::delete('transformation-plans/{transformationPlan}', [TransformationPlanController::class, 'destroy'])
+            ->whereNumber('transformationPlan')
+            ->name('transformation-plans.destroy');
+        foreach (['suspend', 'resume', 'close'] as $action) {
+            Route::post("transformation-plans/{transformationPlan}/{$action}", [TransformationPlanController::class, $action])
+                ->whereNumber('transformationPlan')
+                ->name("transformation-plans.{$action}");
+        }
+        Route::get('transformation-plans/{transformationPlan}/versions', [TransformationPlanVersionController::class, 'index'])
+            ->whereNumber('transformationPlan')
+            ->name('transformation-plans.versions.index');
+        Route::get('transformation-plans/{transformationPlan}/versions/{transformationPlanVersion}', [TransformationPlanVersionController::class, 'show'])
+            ->whereNumber(['transformationPlan', 'transformationPlanVersion'])
+            ->name('transformation-plans.versions.show');
+        Route::post('transformation-plans/{transformationPlan}/draft', [TransformationPlanVersionController::class, 'startDraft'])
+            ->whereNumber('transformationPlan')
+            ->name('transformation-plans.draft.store');
+        Route::put('transformation-plans/{transformationPlan}/draft', [TransformationPlanVersionController::class, 'saveDraft'])
+            ->whereNumber('transformationPlan')
+            ->name('transformation-plans.draft.update');
+        Route::delete('transformation-plans/{transformationPlan}/draft', [TransformationPlanVersionController::class, 'discardDraft'])
+            ->whereNumber('transformationPlan')
+            ->name('transformation-plans.draft.destroy');
+        Route::post('transformation-plans/{transformationPlan}/publish', [TransformationPlanVersionController::class, 'publish'])
+            ->whereNumber('transformationPlan')
+            ->name('transformation-plans.publish');
+        foreach (['start', 'complete', 'hold', 'resume', 'cancel', 'reopen'] as $action) {
+            Route::post("transformation-plans/{transformationPlan}/items/{transformationPlanItem}/{$action}", [TransformationPlanItemController::class, $action])
+                ->whereNumber(['transformationPlan', 'transformationPlanItem'])
+                ->name("transformation-plans.items.{$action}");
+        }
 
         // Landing-page announcements (ADR-022), IMC administration.
         Route::get('announcements', [PublicAnnouncementController::class, 'index'])->name('announcements.index');

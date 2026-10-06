@@ -1,12 +1,14 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { CheckCircle2, Info, Pencil, RotateCcw, Save, X } from 'lucide-react';
+import { CheckCircle2, Info, Pencil, RotateCcw, Save, Tags, X } from 'lucide-react';
 import { api } from '../../api';
 import type { ServiceListing, ServiceProvider } from '../../api';
 import { useApiMutation } from '../../hooks/useApiMutation';
 import { useApiQuery } from '../../hooks/useApiQuery';
 import { useMyProvider } from '../../hooks/useMyOrganization';
+import { PackageList } from '../../components/listings/PackageList';
 import { ServiceListingCard } from '../../components/listings/ServiceListingCard';
+import { PackagesEditorModal } from '../../components/provider/PackagesEditorModal';
 import { ApiErrorState } from '../../components/ui/ApiErrorState';
 import { ApprovalBadge, ListingStatusBadge } from '../../components/ui/ApprovalBadge';
 import { Button } from '../../components/ui/Button';
@@ -21,8 +23,9 @@ import { ServicePicker } from '../../components/ui/ServicePicker';
 /**
  * The provider's own listings: one card per catalog service it offers. The service name and category
  * are IMC's fixed catalog; the description, logo and experience are the provider's profile; an «إعلان»
- * label is an IMC promotion. Visibility to factories follows IMC's approval of the provider. Prices are
- * not part of a listing: they are given in each offer.
+ * label is an IMC promotion. Visibility to factories follows IMC's approval of the provider. Each listing
+ * may carry packages with monthly and annual prices and a number of users (jahez_api ADR-027): changing
+ * them sends the listing back to IMC review. The binding price is still given in each offer.
  */
 export const ProviderServices: React.FC = () => {
   const navigate = useNavigate();
@@ -31,6 +34,7 @@ export const ProviderServices: React.FC = () => {
   const [editing, setEditing] = useState(false);
   const [saved, setSaved] = useState(false);
   const [resubmitting, setResubmitting] = useState<ServiceListing | null>(null);
+  const [pricing, setPricing] = useState<ServiceListing | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const listings = useApiQuery((signal) => api.serviceListings.list({ page, per_page: 12, signal }), [page]);
 
@@ -77,6 +81,19 @@ export const ProviderServices: React.FC = () => {
                 listings.refetch();
               }}
               onClose={() => setResubmitting(null)}
+            />
+          )}
+          {pricing?.service && (
+            <PackagesEditorModal
+              providerId={p.id}
+              service={pricing.service}
+              packages={pricing.packages}
+              onClose={() => setPricing(null)}
+              onSaved={() => {
+                setPricing(null);
+                setNotice('حُفظت الباقات والأسعار، وأُرسلت الخدمة لمراجعة المركز. لا تظهر للمصانع حتى تُعتمد من جديد.');
+                listings.refetch();
+              }}
             />
           )}
           {saved && (
@@ -130,6 +147,19 @@ export const ProviderServices: React.FC = () => {
                       detailsPath={`/provider/requests?service=${listing.service?.code ?? ''}`}
                       footer={
                         <div className="space-y-2">
+                          <PackageList packages={listing.packages} />
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            icon={Tags}
+                            className="w-full"
+                            disabled={listing.review?.status === 'suspended'}
+                            title={listing.review?.status === 'suspended' ? 'الخدمة موقوفة من المركز: تُعدّل الباقات بعد إعادة اعتمادها.' : undefined}
+                            onClick={() => setPricing(listing)}
+                            data-action="edit-packages"
+                          >
+                            الباقات والأسعار
+                          </Button>
                           {listing.review && (
                             <div className="text-[11px] space-y-1" data-listing-status={listing.review.status}>
                               <div className="flex items-center justify-between gap-2">

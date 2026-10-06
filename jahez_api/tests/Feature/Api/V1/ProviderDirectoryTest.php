@@ -17,15 +17,18 @@ beforeEach(function () {
  */
 function actingAsMemberOfFactoryIn(string ...$sectorCodes): User
 {
-    $member = User::factory()->factoryMember(Factory::factory()->inSectors(...$sectorCodes)->create())->create();
+    $factory = Factory::factory()->inSectors(...$sectorCodes)->create();
+    // Readiness-based eligibility (ADR-025) is tested in ServiceEligibilityTest.
+    everyServiceAvailable($factory);
+    $member = User::factory()->factoryMember($factory)->create();
     Sanctum::actingAs($member);
 
     return $member;
 }
 
 it('lists approved providers that target one of the factory sectors', function () {
-    $eligible = ServiceProvider::factory()->approved()->inSectors('food', 'chemical')->create(['name' => 'Eligible Foods']);
-    ServiceProvider::factory()->approved()->inSectors('engineering_metal')->create(['name' => 'Other Sector']);
+    $eligible = ServiceProvider::factory()->approved()->inSectors('food', 'chemical')->offering('erp_business_applications.01')->create(['name' => 'Eligible Foods']);
+    ServiceProvider::factory()->approved()->inSectors('engineering_metal')->offering('erp_business_applications.01')->create(['name' => 'Other Sector']);
     actingAsMemberOfFactoryIn('food');
 
     $response = $this->getJson(route('api.v1.provider-directory'));
@@ -34,7 +37,7 @@ it('lists approved providers that target one of the factory sectors', function (
 });
 
 it('hides providers that IMC has not approved', function (ProviderApprovalStatus $status) {
-    ServiceProvider::factory()->withApprovalStatus($status)->inSectors('food')->create();
+    ServiceProvider::factory()->withApprovalStatus($status)->inSectors('food')->offering('erp_business_applications.01')->create();
     actingAsMemberOfFactoryIn('food');
 
     $this->getJson(route('api.v1.provider-directory'))->assertOk()->assertJsonPath('meta.total', 0);
@@ -68,7 +71,7 @@ it('shows the public profile only, without contact details, legal information or
 });
 
 it('lists nothing for a factory with no sectors', function () {
-    ServiceProvider::factory()->approved()->inSectors('food')->create();
+    ServiceProvider::factory()->approved()->inSectors('food')->offering('erp_business_applications.01')->create();
     actingAsMemberOfFactoryIn();
 
     $this->getJson(route('api.v1.provider-directory'))->assertOk()->assertJsonPath('meta.total', 0);
@@ -102,8 +105,8 @@ it('rejects filters and sorts outside the allow-list with 422', function (array 
 ]);
 
 it('sorts by the allow-listed keys', function (string $sort, array $expectedNames) {
-    ServiceProvider::factory()->approved()->inSectors('food')->create(['name' => 'Beta', 'dx_experience_years' => 3]);
-    ServiceProvider::factory()->approved()->inSectors('food')->create(['name' => 'Alpha', 'dx_experience_years' => 10]);
+    ServiceProvider::factory()->approved()->inSectors('food')->offering('erp_business_applications.01')->create(['name' => 'Beta', 'dx_experience_years' => 3]);
+    ServiceProvider::factory()->approved()->inSectors('food')->offering('erp_business_applications.01')->create(['name' => 'Alpha', 'dx_experience_years' => 10]);
     actingAsMemberOfFactoryIn('food');
 
     expect($this->getJson(route('api.v1.provider-directory', ['sort' => $sort]))->json('data.*.name'))->toBe($expectedNames);
@@ -116,7 +119,7 @@ it('sorts by the allow-listed keys', function (string $sort, array $expectedName
 
 it('searches names literally, treating % and _ as plain characters', function (string $term, array $expectedNames) {
     foreach (['100% Digital', '1000 Systems', 'Data_Works', 'DataXWorks'] as $name) {
-        ServiceProvider::factory()->approved()->inSectors('food')->create(['name' => $name]);
+        ServiceProvider::factory()->approved()->inSectors('food')->offering('erp_business_applications.01')->create(['name' => $name]);
     }
     actingAsMemberOfFactoryIn('food');
 
@@ -127,8 +130,8 @@ it('searches names literally, treating % and _ as plain characters', function (s
 ]);
 
 it('shows IMC administrators every approved provider, in any sector', function () {
-    ServiceProvider::factory()->approved()->inSectors('food')->create();
-    ServiceProvider::factory()->approved()->inSectors('engineering_metal')->create();
+    ServiceProvider::factory()->approved()->inSectors('food')->offering('erp_business_applications.01')->create();
+    ServiceProvider::factory()->approved()->inSectors('engineering_metal')->offering('erp_business_applications.01')->create();
     ServiceProvider::factory()->create();
     Sanctum::actingAs(User::factory()->imcAdmin()->create());
 
@@ -182,9 +185,10 @@ describe('provider profile', function () {
 
         $this->getJson(route('api.v1.provider-directory.show', $makeProvider()))->assertNotFound();
     })->with([
-        'another sector' => [fn () => ServiceProvider::factory()->approved()->inSectors('chemical')->create()],
-        'not approved' => [fn () => ServiceProvider::factory()->inSectors('food')->create()],
-        'suspended' => [fn () => ServiceProvider::factory()->withApprovalStatus(ProviderApprovalStatus::Suspended)->inSectors('food')->create()],
+        'another sector' => [fn () => ServiceProvider::factory()->approved()->inSectors('chemical')->offering('erp_business_applications.01')->create()],
+        'not approved' => [fn () => ServiceProvider::factory()->inSectors('food')->offering('erp_business_applications.01')->create()],
+        'suspended' => [fn () => ServiceProvider::factory()->withApprovalStatus(ProviderApprovalStatus::Suspended)->inSectors('food')->offering('erp_business_applications.01')->create()],
+        'no approved listing (ADR-025)' => [fn () => ServiceProvider::factory()->approved()->inSectors('food')->create()],
     ]);
 
     it('returns 404 for a provider that does not exist', function () {
@@ -194,14 +198,14 @@ describe('provider profile', function () {
     });
 
     it('opens any approved provider for an IMC administrator', function () {
-        $provider = ServiceProvider::factory()->approved()->inSectors('chemical')->create();
+        $provider = ServiceProvider::factory()->approved()->inSectors('chemical')->offering('erp_business_applications.01')->create();
         Sanctum::actingAs(User::factory()->imcAdmin()->create());
 
         $this->getJson(route('api.v1.provider-directory.show', $provider))->assertOk();
     });
 
     it('returns 403 to provider members', function () {
-        $provider = ServiceProvider::factory()->approved()->inSectors('food')->create();
+        $provider = ServiceProvider::factory()->approved()->inSectors('food')->offering('erp_business_applications.01')->create();
         Sanctum::actingAs(User::factory()->providerMember()->create());
 
         $this->getJson(route('api.v1.provider-directory.show', $provider))->assertForbidden();
@@ -210,7 +214,7 @@ describe('provider profile', function () {
 
 it('shows contact details in the list and profile only when the owner enables it (OQ-37)', function () {
     config(['jahez.providers.directory_shows_contact_details' => true]);
-    $provider = ServiceProvider::factory()->approved()->inSectors('food')->create([
+    $provider = ServiceProvider::factory()->approved()->inSectors('food')->offering('erp_business_applications.01')->create([
         'representative_name' => 'Mona Adel',
         'job_title' => 'Sales Director',
         'email' => 'sales@eligible.example',
@@ -266,7 +270,7 @@ describe('recommended filter', function () {
     });
 
     it('rejects the filter before the factory has completed an assessment', function () {
-        actingAsMemberOfFactoryIn('food');
+        Sanctum::actingAs(User::factory()->factoryMember(Factory::factory()->inSectors('food')->create())->create());
 
         $this->getJson(route('api.v1.provider-directory', ['filter' => ['recommended' => 1]]))
             ->assertUnprocessable()

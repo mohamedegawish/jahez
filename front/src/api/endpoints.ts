@@ -9,6 +9,15 @@
 import type { ApiClient, Query, RequestOptions } from './client';
 import type {
   AccountSettingsPayload,
+  FactoryServiceEligibility,
+  PlanDraftPayload,
+  PlanItemAction,
+  PlanVersionView,
+  ReadinessCategoryCode,
+  ReadinessLevelsOverview,
+  TransformationPlan,
+  TransformationPlanStatus,
+  TransformationPlanVersionSummary,
   AgreementFinancialReadiness,
   FinancialPolicy,
   FinancialPolicyCreatePayload,
@@ -34,6 +43,10 @@ import type {
   PublicAnnouncement,
   NotificationPage,
   ServiceListingPage,
+  ServiceListingPackageInput,
+  ServiceCart,
+  ServiceCartItemInput,
+  ServiceCartCheckoutEntry,
   ServicePromotion,
   ServicePromotionPayload,
   ApprovalDecisionPayload,
@@ -261,6 +274,9 @@ export function createEndpoints(client: Pick<ApiClient, 'request'>) {
       /** The provider sends a rejected listing back to review (ADR-022); 409 for any other status. */
       resubmitListing: (id: number, catalogServiceId: number, note?: string | null) =>
         data(send<DataEnvelope<ServiceProvider>>('POST', `/service-providers/${id}/services/${catalogServiceId}/resubmit`, { body: note ? { note } : {} })),
+      /** The provider replaces a listing's packages (ADR-027); the listing goes back to IMC review. 409 when suspended. */
+      updateListingPackages: (id: number, catalogServiceId: number, packages: ServiceListingPackageInput[]) =>
+        data(send<DataEnvelope<ServiceProvider>>('PUT', `/service-providers/${id}/services/${catalogServiceId}/packages`, { body: { packages } })),
       get: (id: number, signal?: AbortSignal) =>
         data(get<DataEnvelope<ServiceProvider>>(`/service-providers/${id}`, undefined, signal)),
       create: (payload: ServiceProviderPayload & { name: string }) =>
@@ -362,6 +378,20 @@ export function createEndpoints(client: Pick<ApiClient, 'request'>) {
         data(send<DataEnvelope<ServiceRequest>>('POST', `/service-requests/${id}/cancel`, { body: reasonBody(reason) })),
       addProviders: (id: number, providerIds: number[]) =>
         data(send<DataEnvelope<ServiceRequest>>('POST', `/service-requests/${id}/providers`, { body: { provider_ids: providerIds } })),
+    },
+
+    // ─── The factory member's cart (ADR-027): no payment, the totals are estimates ───
+    cart: {
+      get: (signal?: AbortSignal) => data(get<DataEnvelope<ServiceCart>>('/cart', undefined, signal)),
+      /** 201 when added, 200 when the listing was already in the cart (its choice is replaced). */
+      add: (payload: ServiceCartItemInput) => data(send<DataEnvelope<ServiceCart>>('POST', '/cart/items', { body: payload })),
+      update: (itemId: number, payload: Omit<ServiceCartItemInput, 'service' | 'provider_id'>) =>
+        data(send<DataEnvelope<ServiceCart>>('PATCH', `/cart/items/${itemId}`, { body: payload })),
+      remove: (itemId: number) => send<void>('DELETE', `/cart/items/${itemId}`),
+      clear: () => send<void>('DELETE', '/cart'),
+      /** One request per service, sent to every provider in the cart for it; those items leave the cart. */
+      checkout: (requests: ServiceCartCheckoutEntry[]) =>
+        data(send<DataEnvelope<ServiceRequest[]>>('POST', '/cart/checkout', { body: { requests } })),
     },
 
     // ─── Provider requests (one thread per provider), messages and offers ───
@@ -539,6 +569,55 @@ export function createEndpoints(client: Pick<ApiClient, 'request'>) {
             p.signal,
           ),
         ),
+    },
+
+    /** Which catalog services each readiness level makes available (ADR-025): IMC administration. */
+    readinessLevels: {
+      overview: (signal?: AbortSignal) => data(get<DataEnvelope<ReadinessLevelsOverview>>('/readiness-levels', undefined, signal)),
+      /** Make the service available to the level, or switch it on or off there (idempotent). */
+      set: (level: ReadinessCategoryCode, serviceId: number, isActive: boolean) =>
+        send<DataEnvelope<unknown>>('PUT', `/readiness-levels/${level}/services/${serviceId}`, { body: { is_active: isActive } }),
+      /** Remove the service from the level; the catalog service is untouched. */
+      remove: (level: ReadinessCategoryCode, serviceId: number) => send<void>('DELETE', `/readiness-levels/${level}/services/${serviceId}`),
+    },
+
+    /** What a factory may use, decided by the server from its readiness level (ADR-025). */
+    serviceEligibility: {
+      get: (factoryId: number, signal?: AbortSignal) =>
+        data(get<DataEnvelope<FactoryServiceEligibility>>(`/factories/${factoryId}/service-eligibility`, undefined, signal)),
+      providers: (factoryId: number, serviceId: number, signal?: AbortSignal) =>
+        data(get<DataEnvelope<ProviderDirectoryEntry[]>>(`/factories/${factoryId}/service-eligibility/${serviceId}/providers`, undefined, signal)),
+    },
+
+    /** Factory transformation plans (ADR-025): IMC writes them; the factory reads its published plan. */
+    transformationPlans: {
+      list: (p: ListQuery<{ status?: TransformationPlanStatus; factory?: number }> = {}) =>
+        get<Paginated<TransformationPlan>>('/transformation-plans', listQuery(p), p.signal),
+      get: (id: number, signal?: AbortSignal) => data(get<DataEnvelope<TransformationPlan>>(`/transformation-plans/${id}`, undefined, signal)),
+      create: (factoryId: number, payload: { title: string; summary_ar?: string | null }) =>
+        data(send<DataEnvelope<TransformationPlan>>('POST', `/factories/${factoryId}/transformation-plans`, { body: payload })),
+      remove: (id: number) => send<void>('DELETE', `/transformation-plans/${id}`),
+      suspend: (id: number, reason?: string | null) =>
+        data(send<DataEnvelope<TransformationPlan>>('POST', `/transformation-plans/${id}/suspend`, { body: reasonBody(reason) })),
+      resume: (id: number, reason?: string | null) =>
+        data(send<DataEnvelope<TransformationPlan>>('POST', `/transformation-plans/${id}/resume`, { body: reasonBody(reason) })),
+      close: (id: number, reason?: string | null) =>
+        data(send<DataEnvelope<TransformationPlan>>('POST', `/transformation-plans/${id}/close`, { body: reasonBody(reason) })),
+      versions: (id: number, signal?: AbortSignal) =>
+        data(get<DataEnvelope<TransformationPlanVersionSummary[]>>(`/transformation-plans/${id}/versions`, undefined, signal)),
+      version: (id: number, versionId: number, signal?: AbortSignal) =>
+        data(get<DataEnvelope<PlanVersionView>>(`/transformation-plans/${id}/versions/${versionId}`, undefined, signal)),
+      startDraft: (id: number) => data(send<DataEnvelope<TransformationPlan>>('POST', `/transformation-plans/${id}/draft`)),
+      /** Replaces the whole draft; 409 when `based_on_revision` is stale. */
+      saveDraft: (id: number, payload: PlanDraftPayload) =>
+        data(send<DataEnvelope<TransformationPlan>>('PUT', `/transformation-plans/${id}/draft`, { body: payload })),
+      discardDraft: (id: number) => data(send<DataEnvelope<TransformationPlan>>('DELETE', `/transformation-plans/${id}/draft`)),
+      /** 422 with `errors.draft` while a blocking problem remains. */
+      publish: (id: number, changeNote?: string | null) =>
+        data(send<DataEnvelope<TransformationPlan>>('POST', `/transformation-plans/${id}/publish`, { body: changeNote ? { change_note: changeNote } : {} })),
+      /** IMC records an item's execution (owner decision: IMC only, OQ-52). */
+      itemAction: (id: number, itemId: number, action: PlanItemAction, reason?: string | null) =>
+        data(send<DataEnvelope<TransformationPlan>>('POST', `/transformation-plans/${id}/items/${itemId}/${action}`, { body: reasonBody(reason) })),
     },
 
     /** Reviewed changes to a factory's recorded legal information. */

@@ -1,5 +1,5 @@
 import React from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { CheckCircle2, Send, FileText, Receipt, Compass, TrendingUp, Building2 } from 'lucide-react';
 import { api } from '../../api';
 import type { Factory } from '../../api';
@@ -16,17 +16,19 @@ import { CardSkeleton } from '../../components/ui/LoadingState';
 import { QueryBoundary } from '../../components/ui/QueryBoundary';
 import { FactoryApprovalNotice } from '../../components/factory/FactoryApprovalNotice';
 import { OnboardingSteps } from '../../components/factory/OnboardingSteps';
+import { PackageList } from '../../components/listings/PackageList';
 import { ServiceListingCard } from '../../components/listings/ServiceListingCard';
 import { RecentNotifications } from '../../components/notifications/RecentNotifications';
 
 /** Every figure comes from the API: list totals and the marketplace report (last twelve months). */
 async function loadCounts(signal: AbortSignal) {
-  const [open, all, report, unread, listings] = await Promise.all([
+  const [open, all, report, unread, listings, plans] = await Promise.all([
     api.serviceRequests.list({ per_page: 1, filter: { status: 'open' }, signal }),
     api.serviceRequests.list({ per_page: 1, signal }),
     api.reports.marketplace({ signal }),
     api.providerRequests.list({ per_page: 1, filter: { unread: true }, signal }),
     api.serviceListings.list({ per_page: 1, signal }),
+    api.transformationPlans.list({ per_page: 1, signal }),
   ]);
   return {
     openRequests: open.meta.total,
@@ -35,6 +37,8 @@ async function loadCounts(signal: AbortSignal) {
     report,
     unreadThreads: unread.meta.total,
     availableServices: listings.meta.total,
+    /** Plans IMC published for the factory (ADR-025); drafts are never listed for it. */
+    publishedPlans: plans.meta.total,
   };
 }
 
@@ -61,11 +65,17 @@ export const FactoryDashboard: React.FC = () => {
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               <KPICard
-                title="نتيجة الجاهزية الرقمية"
-                value={f.current_readiness ? f.current_readiness.total_score : '—'}
+                title="مستوى الجاهزية الرقمية"
+                value={f.readiness_level?.name_ar ?? '—'}
                 icon={TrendingUp}
                 accentColor="purple"
-                description={f.current_readiness?.category?.name_ar ?? 'لم يتم التقييم بعد'}
+                description={
+                  !f.readiness_level
+                    ? 'لم يتم التقييم بعد'
+                    : f.readiness_level.unlocked_by === 'plan_completion'
+                      ? 'فُتح بإتمام خدمات المستوى السابق في خطة التحول'
+                      : 'حسب آخر تقييم للجاهزية الرقمية'
+                }
                 onClick={() => navigate('/factory/assessment')}
               />
               <KPICard
@@ -141,11 +151,11 @@ const Banner: React.FC<{ factory: Factory; userName: string; sectorNames: string
 /** The journey is derived from real records: an assessment, a service request, an approved agreement. */
 const Journey: React.FC<{ assessed: boolean; counts?: Counts }> = ({ assessed, counts }) => {
   const approved = (counts?.report.agreements.by_review_status.approved ?? 0) > 0;
-  const done = [assessed, assessed, (counts?.allRequests ?? 0) > 0, (counts?.agreements ?? 0) > 0, approved];
+  const done = [assessed, (counts?.publishedPlans ?? 0) > 0, (counts?.allRequests ?? 0) > 0, (counts?.agreements ?? 0) > 0, approved];
   const current = done.indexOf(false);
   const stages = [
     { title: '1. تقييم الجاهزية', desc: 'تحديد فئة الجاهزية الرقمية' },
-    { title: '2. خطة التحول', desc: 'خارطة الطريق المقترحة للفئة' },
+    { title: '2. خطة التحول', desc: 'خطة تنشرها الوزارة لمنشأتكم', link: '/factory/roadmap' },
     { title: '3. طلب الخدمات', desc: 'طلب خدمة من مزودين مؤهلين' },
     { title: '4. التفاوض والاتفاق', desc: 'قبول عرض أحد المزودين' },
     { title: '5. اعتماد المركز', desc: 'اعتماد الاتفاقية ثم مسودة العقد' },
@@ -170,6 +180,11 @@ const Journey: React.FC<{ assessed: boolean; counts?: Counts }> = ({ assessed, c
               {done[idx] && <CheckCircle2 className="w-4 h-4 text-[#1D7E4C]" />}
             </div>
             <p className={`text-[11px] ${idx === current ? 'text-[#DFF3FF]' : 'text-[#667085]'}`}>{stage.desc}</p>
+            {stage.link && (
+              <Link to={stage.link} className={`text-[11px] font-bold underline ${idx === current ? 'text-white' : 'text-[#5146A5]'}`}>
+                عرض الخطة
+              </Link>
+            )}
           </div>
         ))}
       </div>
@@ -236,7 +251,12 @@ const Featured: React.FC = () => {
       </div>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
         {(featured.data?.data ?? []).map((listing) => (
-          <ServiceListingCard key={listing.id} listing={listing} detailsPath={`/factory/services/${listing.service?.id}`} />
+          <ServiceListingCard
+            key={listing.id}
+            listing={listing}
+            detailsPath={`/factory/services/${listing.service?.id}`}
+            footer={<PackageList packages={listing.packages} compact />}
+          />
         ))}
       </div>
     </div>

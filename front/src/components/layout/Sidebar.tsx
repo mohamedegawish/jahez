@@ -25,7 +25,10 @@ import {
   ShieldCheck,
   FilePen,
   Bell,
-  Landmark
+  Landmark,
+  Map as MapIcon,
+  Route as RouteIcon,
+  ShoppingCart,
 } from 'lucide-react';
 import logoUrl from '../../../logo.jpeg';
 import { api } from '../../api';
@@ -158,6 +161,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               { label: 'المصانع المسجلة', path: '/admin/factories', icon: Factory },
               { label: 'مزودو الخدمات', path: '/admin/providers', icon: Building2 },
               { label: 'إدارة تقييم الجاهزية الرقمية', path: '/admin/readiness', icon: ClipboardCheck },
+              { label: 'خطط التحول الرقمي', path: '/admin/roadmaps', icon: RouteIcon },
               { label: 'طلبات الخدمة والتفاوض', path: '/admin/requests', icon: Send },
               { label: 'الإعلانات والحملات الترويجية', path: '/admin/ads', icon: Megaphone }
             ]
@@ -199,6 +203,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
               { label: 'لوحة التحكم', path: '/factory/dashboard', icon: LayoutDashboard },
               { label: 'تقييم الجاهزية الرقمية', path: '/factory/assessment', icon: ClipboardCheck },
               { label: 'الخدمات', path: '/factory/services', icon: Compass },
+              { label: 'سلة الطلبات', path: '/factory/cart', icon: ShoppingCart },
+              { label: 'خطة التحول الرقمي', path: '/factory/roadmap', icon: MapIcon },
               { label: 'خدماتي', path: '/factory/requests', icon: Layers, badge: pendingInbox },
               { label: 'العقود', path: '/factory/contracts', icon: FileText },
               { label: 'الفواتير', path: '/factory/invoices', icon: Receipt },

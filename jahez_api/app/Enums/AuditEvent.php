@@ -33,10 +33,22 @@ enum AuditEvent: string
      */
     case FactoryAssessmentRecorded = 'factory.assessment_recorded';
     case ReadinessAssessmentCompleted = 'factory.readiness_assessment_completed';
+    case ReadinessLevelUnlocked = 'factory.readiness_level_unlocked';
     case ReadinessQuestionnaireDrafted = 'readiness_questionnaire.drafted';
     case ReadinessQuestionnaireUpdated = 'readiness_questionnaire.updated';
     case ReadinessQuestionnairePublished = 'readiness_questionnaire.published';
     case ReadinessQuestionnaireDeleted = 'readiness_questionnaire.deleted';
+    case ReadinessLevelServiceAssigned = 'readiness_level_service.assigned';
+    case ReadinessLevelServiceUpdated = 'readiness_level_service.updated';
+    case ReadinessLevelServiceRemoved = 'readiness_level_service.removed';
+    case TransformationPlanCreated = 'transformation_plan.created';
+    case TransformationPlanDeleted = 'transformation_plan.deleted';
+    case TransformationPlanDraftStarted = 'transformation_plan.draft_started';
+    case TransformationPlanDraftSaved = 'transformation_plan.draft_saved';
+    case TransformationPlanDraftDiscarded = 'transformation_plan.draft_discarded';
+    case TransformationPlanPublished = 'transformation_plan.published';
+    case TransformationPlanStatusChanged = 'transformation_plan.status_changed';
+    case TransformationPlanItemStatusChanged = 'transformation_plan.item_status_changed';
     case ServiceProviderCreated = 'service_provider.created';
     case ServiceProviderRegistered = 'service_provider.registered';
     case ServiceProviderUpdated = 'service_provider.updated';
@@ -44,6 +56,7 @@ enum AuditEvent: string
     case ServiceProviderReviewRequested = 'service_provider.review_requested';
     case ServiceListingReviewed = 'service_listing.reviewed';
     case ServiceListingResubmitted = 'service_listing.resubmitted';
+    case ServiceListingPackagesUpdated = 'service_listing.packages_updated';
     case ServiceProviderEvaluationRecorded = 'service_provider.evaluation_recorded';
     case ProviderChangeRequestSubmitted = 'service_provider.change_request_submitted';
     case ProviderChangeRequestApproved = 'service_provider.change_request_approved';

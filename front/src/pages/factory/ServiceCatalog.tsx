@@ -53,7 +53,7 @@ export const ServiceCatalog: React.FC = () => {
         </div>
         <h2 className="text-xl sm:text-2xl font-bold text-[#172033] tracking-tight">كتالوج خدمات التحول للثورة الصناعية الرابعة</h2>
         <p className="text-xs sm:text-sm text-[#667085] mt-0.5">
-          الخدمات المعتمدة من مركز تحديث الصناعة. اختر خدمة لتعرف المزودين المؤهلين لمنشأتك وتقدّم طلبك.
+          خدمات الكتالوج المعتمد التي أتاحتها الوزارة لمستوى جاهزية منشأتك وللمستويات السابقة له. اختر خدمة لتعرف المزودين المؤهلين لمنشأتك وتقدّم طلبك.
         </p>
       </div>
 
@@ -118,6 +118,19 @@ export const ServiceCatalog: React.FC = () => {
       <QueryBoundary query={services} loading={<CardSkeleton />}>
         {(all) => {
           const shown = all.filter((s) => needle === '' || s.name_ar.toLowerCase().includes(needle) || s.code.toLowerCase().includes(needle));
+          if (all.length === 0 && !list.hasActiveFilters) {
+            // ADR-025: the API lists only the services IMC made available to the factory's readiness level.
+            return hasAssessment ? (
+              <EmptyState title="لم تُتح خدمات لمستوى جاهزيتكم بعد" description="تحدد الوزارة الخدمات المتاحة لكل مستوى جاهزية، وتظهر هنا خدمات مستواكم والمستويات السابقة له عند إتاحتها." />
+            ) : (
+              <EmptyState
+                title="أكملوا تقييم الجاهزية الرقمية لعرض الخدمات"
+                description="الخدمات المتاحة لمنشأتكم مرتبطة بمستوى جاهزيتها، ولا تظهر قبل إكمال التقييم."
+                actionText="ابدأ التقييم"
+                onAction={() => navigate('/factory/assessment')}
+              />
+            );
+          }
           if (shown.length === 0) {
             return (
               <EmptyState

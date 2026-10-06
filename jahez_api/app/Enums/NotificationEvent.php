@@ -34,9 +34,14 @@ enum NotificationEvent: string
     case ServiceListingSubmitted = 'service_listing_submitted';
     case ServiceListingReviewed = 'service_listing_reviewed';
     case ServiceListingResubmitted = 'service_listing_resubmitted';
+    case ServiceListingPackagesChanged = 'service_listing_packages_changed';
     case PromotionStarted = 'promotion_started';
     case PromotionEnded = 'promotion_ended';
     case ReadinessAssessmentCompleted = 'readiness_assessment_completed';
+    case ReadinessLevelUnlocked = 'readiness_level_unlocked';
+    case TransformationPlanPublished = 'transformation_plan_published';
+    case TransformationPlanStatusChanged = 'transformation_plan_status_changed';
+    case TransformationPlanItemUpdated = 'transformation_plan_item_updated';
 
     /**
      * The Arabic title shown in the list and used as the email subject.
@@ -69,9 +74,14 @@ enum NotificationEvent: string
             self::ServiceListingSubmitted => 'خدمة جديدة بانتظار المراجعة',
             self::ServiceListingReviewed => 'تحديث حالة إحدى خدماتكم',
             self::ServiceListingResubmitted => 'أُعيد تقديم خدمة للمراجعة',
+            self::ServiceListingPackagesChanged => 'تحديث باقات وأسعار خدمة بانتظار المراجعة',
             self::PromotionStarted => 'بدأ إعلان لإحدى خدماتكم',
             self::PromotionEnded => 'انتهى إعلان لإحدى خدماتكم',
             self::ReadinessAssessmentCompleted => 'سُجّل تقييم الجاهزية الرقمية',
+            self::ReadinessLevelUnlocked => 'فُتح مستوى جاهزية جديد لمنشأتكم',
+            self::TransformationPlanPublished => 'نُشرت خطة التحول الرقمي لمنشأتكم',
+            self::TransformationPlanStatusChanged => 'تحديث حالة خطة التحول الرقمي',
+            self::TransformationPlanItemUpdated => 'تحديث حالة خدمة في خطة التحول الرقمي',
         };
     }
 }

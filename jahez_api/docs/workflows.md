@@ -18,7 +18,7 @@ State machines the API enforces. Clients never set a status field: each change i
 
 **Factories (ADR-021, consequences PROPOSED, OQ-46)** follow the same table through `POST /factories/{id}/approval` (`factories.approve`) and `POST /factories/{id}/review-request`. The decision never touches the readiness assessment. With `JAHEZ_FACTORY_APPROVAL_REQUIRED` on, only an approved factory sends requests.
 
-**Service listings (ADR-021)**, per provider and catalog service, through `POST /service-providers/{id}/services/{catalogService}/review` (`service_listings.review`): `pending → approved | rejected`, `approved → suspended`, `rejected | suspended → approved`; reject and suspend need a reason. The provider's own members send a `rejected` listing back with `POST …/services/{catalogService}/resubmit` (ADR-022): `rejected → pending`, never approved automatically; 409 from any other status. A factory sees a listing only when the listing and its provider are both approved and the provider is eligible for the factory; a promotion only reorders such listings.
+**Service listings (ADR-021)**, per provider and catalog service, through `POST /service-providers/{id}/services/{catalogService}/review` (`service_listings.review`): `pending → approved | rejected`, `approved → suspended`, `rejected | suspended → approved`; reject and suspend need a reason. The provider's own members send a `rejected` listing back with `POST …/services/{catalogService}/resubmit` (ADR-022): `rejected → pending`, never approved automatically; 409 from any other status. Changing the listing's packages and prices with `PUT …/services/{catalogService}/packages` (ADR-027, owner decision) moves `approved | rejected → pending` (a pending listing stays pending) and is refused with 409 while `suspended`; factories see the new prices only after IMC approves the listing again. A factory sees a listing only when the listing and its provider are both approved and the provider is eligible for the factory; a promotion only reorders such listings.
 
 Approving a provider, and asking for a new review, first checks the profile fields the owner made required ([OQ-36](open-questions.md#oq-36); none by default). Only `approved` providers appear to factories. A profile edit does not change the status (owner decision). Suspending a provider **pauses** its open threads (see the negotiation section below).
 
@@ -43,6 +43,8 @@ Accepting an offer creates **no contract, invoice or payment** (OQ-17, OQ-15, OQ
 | `open` | add providers (PROPOSED) | requesting factory | `open` | One new `pending` thread per added eligible provider; at most 20 providers per request; a provider already on the request cannot be added again |
 
 `awarded` and `cancelled` are final (`ServiceRequestStatus::canBecome`).
+
+**From the cart (ADR-027).** A factory member collects provider listings in a cart (package, billing period, users). `POST /cart/checkout` creates, in one transaction, one request per chosen service in state `open`, with one `pending` thread per provider in the cart for it; each thread keeps a copy of the choice (`selection`). The items sent leave the cart. Everything after that follows the table above; nothing is paid or invoiced from a cart.
 
 ### Provider request (`provider_requests.status`): one per provider
 
@@ -146,3 +148,52 @@ A decision is final (409 on a second one). The full path a client shows is: requ
 ## 2d. Factory legal change request (ADR-020, PROPOSED, OQ-45)
 
 `pending` → `approved` (values and documents applied, earlier documents superseded) | `rejected` (reason required, recorded values kept) | `cancelled` (by a member). One pending request per factory.
+
+## 4. Readiness-based availability and transformation plans (ADR-025; execution recording OWNER-APPROVED interim, OQ-52)
+
+**Availability.** A factory sees and requests a catalog service only when its level, or a level below it, has an active `readiness_level_services` row for it, which IMC manages (levels are cumulative, ADR-026), and only from providers that are approved, hold an approved listing of the service and target one of its sectors. There is no service before the first assessment. `App\Readiness\ServiceEligibility` decides it for every path, and request creation re-checks it inside the transaction.
+
+**The factory's level (ADR-026, owner decisions 2026-10-06).** It is the highest of its current assessment's category and the levels it opened through its plan:
+
+| Event | Effect |
+| --- | --- |
+| IMC completes or cancels a plan item, or publishes a version | When every non-cancelled item of the published version whose service belongs to the factory's level is `completed` (at least one such item), the next level opens: a `readiness_level_unlocks` row, an audit entry, a notification. Repeats from the new level; Smart opens nothing further |
+| A service belongs to a level | The lowest level with an active `readiness_level_services` row for it; a service available to no level belongs to none |
+| New self-assessment | The level is the highest of the new category and the opened levels: a lower result keeps an opened level (interim, OQ-56) |
+| IMC adds a service to a lower level, publishes a new version or closes the plan | An opened level stays open |
+
+A factory member sees the level, never a score: totals, ranges, pillar scores and points go to IMC only.
+
+### Transformation plan (`transformation_plans.status`)
+
+| From | Action | Actor | To |
+| --- | --- | --- | --- |
+| — | create (factory has an assessment, no other open plan) | IMC (`transformation_plans.manage`) | `draft` (version 1 draft) |
+| `draft` | publish the draft (no blocking review problem) | IMC | `published` |
+| `draft` | delete | IMC | (removed: the factory never saw it) |
+| `published` | suspend (optional reason) | IMC | `suspended`: no start, no new request for its items |
+| `suspended` | resume | IMC | `published` |
+| `published`, `suspended` | close | IMC | `closed` (read-only; a new plan may be created) |
+
+Versions: a published or suspended plan can get a new draft (copied from the published version). Publishing it supersedes the previous version, which stays readable; from version 2 a change note is required. Draft saves name the revision they were based on (409 when stale).
+
+### Plan item execution (`transformation_plan_items.execution_status`, recorded by IMC)
+
+| From | Action | To | Condition |
+| --- | --- | --- | --- |
+| `not_started` | start | `in_progress` | plan published; every prerequisite item in the published version `completed`; the item's live request has an agreement IMC approved (or approval not required) |
+| `in_progress` | complete | `completed` | final (corrections: OQ-52) |
+| `not_started`, `in_progress` | hold | `on_hold` | |
+| `on_hold` | resume | `in_progress` if it had started, else `not_started` | |
+| any but `completed`, `cancelled` | cancel | `cancelled` | dependents keep waiting until a new version drops the dependency |
+| `cancelled` | reopen | `not_started` | |
+
+The state shown for a `not_started` item is computed on every read: `waiting_prerequisites`, then `ready` (approved agreement), `awaiting_approval` (agreement awaiting IMC), else `not_started`.
+
+### Requests for plan items
+
+A factory member sends `POST /service-requests` with `transformation_plan_item_id`:
+- **Refused with 422:** an item outside its published plan, for another service, or a provider other than the one IMC assigned.
+- **Refused with 409:** a plan that is suspended or closed, a completed or cancelled item, or a second live request.
+
+The request then follows section 2 unchanged. Sending it never starts the item, and it may be sent before the prerequisites are completed (owner decision). A cancelled request, or one whose agreement IMC rejected, frees the item for a new request.

@@ -3,6 +3,7 @@
 namespace App\Http\Resources\V1;
 
 use App\Models\CatalogService;
+use App\Models\ServiceListingPackage;
 use App\Models\ServicePromotion;
 use App\Models\ServiceProvider;
 use Illuminate\Http\Request;
@@ -16,9 +17,10 @@ use Illuminate\Support\Carbon;
  * with the bearer token from `provider.logo_path` (relative to /api/v1).
  *
  * The approval status is shown to the provider itself and to IMC; factories only ever
- * see approved providers.
+ * see approved providers. `packages` are the provider's packages and prices for the
+ * service (ADR-027): EGP, informational, reviewed by IMC with the listing.
  *
- * @property array{provider: ServiceProvider|null, service: CatalogService|null, review: array{status: string, reason: string|null, changed_at: string|null, submitted_at: string|null}, promotion: ServicePromotion|null, logo_document_id: int|null, recommended: bool|null, viewer: string} $resource
+ * @property array{provider: ServiceProvider|null, service: CatalogService|null, review: array{status: string, reason: string|null, changed_at: string|null, submitted_at: string|null}, promotion: ServicePromotion|null, logo_document_id: int|null, packages: list<ServiceListingPackage>, recommended: bool|null, viewer: string} $resource
  */
 class ServiceListingResource extends JsonResource
 {
@@ -66,6 +68,7 @@ class ServiceListingResource extends JsonResource
                 'headline' => $promotion->headline,
                 'ends_at' => $promotion->ends_at?->toIso8601ZuluString(),
             ],
+            'packages' => array_map(fn (ServiceListingPackage $package): array => $package->toListing(), $this->resource['packages']),
             'recommended' => $this->resource['recommended'],
             // IMC's review of the listing (ADR-021). A factory only ever sees approved ones.
             ...($viewer !== 'factory' ? ['review' => [

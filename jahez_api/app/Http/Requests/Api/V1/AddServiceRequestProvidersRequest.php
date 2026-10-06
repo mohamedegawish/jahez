@@ -4,6 +4,7 @@ namespace App\Http\Requests\Api\V1;
 
 use App\Models\ServiceProvider;
 use App\Models\ServiceRequest;
+use App\Readiness\ServiceEligibility;
 use Illuminate\Auth\Access\Response;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Foundation\Http\FormRequest;
@@ -13,8 +14,9 @@ use Illuminate\Validation\Validator;
 /**
  * The requesting factory sends its open request to more providers (PROPOSED, OQ-38),
  * for example after every provider declined. Each provider must be eligible for the
- * request's factory and service, as when the request was created. Authorization runs
- * before validation.
+ * request's factory and service, as when the request was created: the service must still
+ * be available to the factory's readiness level (ServiceEligibility, ADR-025).
+ * Authorization runs before validation.
  */
 class AddServiceRequestProvidersRequest extends FormRequest
 {
@@ -64,9 +66,8 @@ class AddServiceRequestProvidersRequest extends FormRequest
     {
         $serviceRequest = $this->serviceRequest();
 
-        return ServiceProvider::query()
-            ->eligibleFor($serviceRequest->industrialFactory()->firstOrFail())
-            ->offering($serviceRequest->service()->firstOrFail())
+        return app(ServiceEligibility::class)
+            ->providersFor($serviceRequest->industrialFactory()->firstOrFail(), $serviceRequest->service()->firstOrFail())
             ->whereKey($this->providerIds());
     }
 

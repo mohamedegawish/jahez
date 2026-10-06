@@ -124,7 +124,7 @@ describe('notifications (scenario G)', function () {
     it('notifies only the chosen providers of a new request, in-app, and queues an email after the commit', function () {
         Queue::fake();
         $this->seed(ReferenceDataSeeder::class);
-        $factoryMember = User::factory()->factoryMember(Factory::factory()->inSectors('food')->create())->create();
+        $factoryMember = User::factory()->factoryMember(factoryWithEveryService('food'))->create();
         $chosen = ServiceProvider::factory()->approved()->inSectors('food')->offering('erp_business_applications.01')->create();
         $other = ServiceProvider::factory()->approved()->inSectors('food')->offering('erp_business_applications.01')->create();
         $chosenMember = User::factory()->providerMember($chosen)->create();
@@ -244,7 +244,7 @@ describe('unread messages', function () {
 describe('service listings and promotions (scenario E)', function () {
     beforeEach(function () {
         $this->seed(ReferenceDataSeeder::class);
-        $this->factoryMember = User::factory()->factoryMember(Factory::factory()->inSectors('food')->create())->create();
+        $this->factoryMember = User::factory()->factoryMember(factoryWithEveryService('food'))->create();
     });
 
     it('shows a factory only eligible listings, promoted ones first and labelled, each listing once', function () {
@@ -333,7 +333,7 @@ describe('service listings and promotions (scenario E)', function () {
     });
 
     it('refuses the recommended filter before the factory has a readiness assessment', function () {
-        Sanctum::actingAs($this->factoryMember);
+        Sanctum::actingAs(User::factory()->factoryMember(Factory::factory()->inSectors('food')->create())->create());
         $this->getJson(route('api.v1.service-listings.index', ['filter' => ['recommended' => 1]]))->assertUnprocessable();
         $this->getJson(route('api.v1.service-listings.index'))->assertJsonPath('meta.readiness', null)->assertJsonPath('meta.has_sectors', true);
     });

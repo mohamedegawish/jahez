@@ -10,6 +10,7 @@ import { EmptyState } from '../../components/ui/EmptyState';
 import { CardSkeleton } from '../../components/ui/LoadingState';
 import { QueryBoundary } from '../../components/ui/QueryBoundary';
 import { ServiceRequestStatusBadge } from '../../components/ui/StatusBadges';
+import { SelectionSummary } from '../../components/listings/PackageList';
 
 /**
  * One factory request as sent to this provider: the full request context and the private negotiation
@@ -59,6 +60,8 @@ export const ProviderRequestDetail: React.FC = () => {
                       <p className="text-[#667085] leading-relaxed whitespace-pre-line bg-[#F7F9FC] p-3 rounded-xl border border-[#E6EAF0]" dir="auto">{request?.requirements ?? '—'}</p>
                     </div>
                   </div>
+                  {/* ADR-027: the package, period and users the factory chose from your listing in its cart. */}
+                  <SelectionSummary selection={t.selection} />
                 </div>
                 <ThreadWorkspace threadId={t.id} mySide="provider" onChanged={thread.refetch} showRequestSummary={false} />
               </>

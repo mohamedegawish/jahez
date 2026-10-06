@@ -3,6 +3,7 @@
 namespace App\Http\Resources\V1;
 
 use App\Models\CatalogService;
+use App\Models\ServiceListingPackage;
 use App\Models\ServiceProvider;
 use Illuminate\Database\Eloquent\Relations\Pivot;
 use Illuminate\Http\Request;
@@ -62,6 +63,12 @@ class ServiceProviderResource extends JsonResource
                     'reason' => $pivot->getAttribute('status_reason'),
                     'changed_at' => $time('status_changed_at'),
                     'submitted_at' => $time('submitted_at'),
+                    // The provider's packages and prices for the service (ADR-027).
+                    'packages' => $this->whenLoaded('listingPackages', fn (): array => $this->listingPackages
+                        ->where('catalog_service_id', $service->id)
+                        ->map(fn (ServiceListingPackage $package): array => $package->toListing())
+                        ->values()
+                        ->all(), []),
                 ];
             })->values()->all()),
             'documents' => $this->whenLoaded('activeDocuments', fn (): array => OrganizationDocumentResource::byType($this->activeDocuments)),

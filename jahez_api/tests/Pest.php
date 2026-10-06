@@ -8,8 +8,10 @@ use App\Enums\FinancialPolicyScope;
 use App\Enums\FinancialPolicyVersionStatus;
 use App\Enums\Permission;
 use App\Enums\ProviderRequestStatus;
+use App\Enums\ReadinessCategoryCode;
 use App\Models\Agreement;
 use App\Models\AgreementReview;
+use App\Models\CatalogService;
 use App\Models\Factory;
 use App\Models\FinancialPolicy;
 use App\Models\FinancialPolicyVersion;
@@ -19,9 +21,12 @@ use App\Models\ProviderRequest;
 use App\Models\ReadinessAssessment;
 use App\Models\ReadinessAssessmentAnswer;
 use App\Models\ReadinessChoice;
+use App\Models\ReadinessLevelService;
 use App\Models\ReadinessQuestionnaire;
 use App\Models\ServiceProvider;
 use App\Models\ServiceRequest;
+use App\Models\TransformationPlan;
+use App\Models\TransformationPlanItem;
 use App\Models\User;
 use App\Models\UserPermissionGrant;
 use Database\Seeders\ReferenceDataSeeder;
@@ -105,7 +110,8 @@ function forgetResolvedUsers(): void
 /**
  * A marketplace scenario for the Phase 6 tests: a food-sector factory whose member sent
  * one service request (ERP, erp_business_applications.01) to $providerCount approved,
- * eligible providers, each thread in $status. Seeds the reference data.
+ * eligible providers, each thread in $status. The service is available to the factory's
+ * readiness level (availableTo()). Seeds the reference data.
  *
  * @return array{factoryMember: User, serviceRequest: ServiceRequest, threads: list<ProviderRequest>, providerMembers: list<User>}
  */
@@ -114,6 +120,7 @@ function marketplaceRequest(int $providerCount = 2, ProviderRequestStatus $statu
     test()->seed(ReferenceDataSeeder::class);
     $factory = Factory::factory()->inSectors('food')->create();
     $factoryMember = User::factory()->factoryMember($factory)->create();
+    availableTo($factory, 'erp_business_applications.01');
     $serviceRequest = ServiceRequest::factory()->forService('erp_business_applications.01')->create([
         'factory_id' => $factory->id,
         'created_by_user_id' => $factoryMember->id,
@@ -131,6 +138,184 @@ function marketplaceRequest(int $providerCount = 2, ProviderRequestStatus $statu
     }
 
     return ['factoryMember' => $factoryMember, 'serviceRequest' => $serviceRequest, 'threads' => $threads, 'providerMembers' => $providerMembers];
+}
+
+/**
+ * Make catalog services available to the factory's digital readiness level, as IMC would
+ * (ADR-025). A factory without an assessment first gets one stored (all «أ»: 10 points,
+ * B4 Automation). Returns the factory's level. Requires the reference data.
+ */
+function availableTo(Factory $factory, string ...$serviceCodes): ReadinessCategoryCode
+{
+    $assessment = $factory->currentReadinessAssessment()->with('category')->first() ?? storedReadinessAssessment($factory)->load('category');
+    $level = $assessment->category->code;
+
+    foreach (CatalogService::query()->whereIn('code', $serviceCodes)->pluck('id') as $serviceId) {
+        $row = ReadinessLevelService::query()->where('level', $level)->where('catalog_service_id', $serviceId)->first() ?? new ReadinessLevelService;
+        $row->level = $level;
+        $row->catalog_service_id = $serviceId;
+        $row->is_active = true;
+        $row->save();
+    }
+
+    $factory->unsetRelation('currentReadinessAssessment');
+
+    return $level;
+}
+
+/**
+ * Make the whole catalog available to the factory's readiness level (availableTo()), for
+ * tests about something other than readiness-based eligibility. Returns the factory.
+ */
+function everyServiceAvailableTo(Factory $factory): Factory
+{
+    availableTo($factory, ...CatalogService::query()->pluck('code')->all());
+
+    return $factory;
+}
+
+/**
+ * Make every catalog service available to every readiness level, for tests about
+ * something other than readiness-based eligibility (ServiceEligibilityTest covers it). A
+ * factory still needs an assessment: the given factory gets one dated 2026-01-01, earlier
+ * than any a test adds afterwards.
+ */
+function everyServiceAvailable(?Factory $factoryToAssess = null): void
+{
+    $serviceIds = CatalogService::query()->pluck('id');
+
+    foreach (ReadinessCategoryCode::cases() as $level) {
+        foreach ($serviceIds as $serviceId) {
+            if (! ReadinessLevelService::query()->where('level', $level)->where('catalog_service_id', $serviceId)->exists()) {
+                $row = new ReadinessLevelService;
+                $row->level = $level;
+                $row->catalog_service_id = $serviceId;
+                $row->save();
+            }
+        }
+    }
+
+    if ($factoryToAssess !== null) {
+        test()->travelTo('2026-01-01 08:00:00');
+        storedReadinessAssessment($factoryToAssess);
+        test()->travelBack();
+        $factoryToAssess->unsetRelation('currentReadinessAssessment');
+    }
+}
+
+/**
+ * A factory in the sectors whose readiness level has every catalog service
+ * (everyServiceAvailable()). Requires the reference data.
+ */
+function factoryWithEveryService(string ...$sectorCodes): Factory
+{
+    $factory = Factory::factory()->inSectors(...$sectorCodes)->create();
+    everyServiceAvailable($factory);
+
+    return $factory;
+}
+
+/**
+ * A transformation plan scenario (ADR-025): an approved food-sector factory assessed at
+ * 20 points (Basic), five catalog services available to Basic, and one approved
+ * food-sector provider offering all of them. Seeds the reference data.
+ *
+ * @return array{factory: Factory, member: User, admin: User, provider: ServiceProvider, providerMember: User, services: array{a: string, b: string, c: string, d: string, e: string}}
+ */
+function planFixture(): array
+{
+    test()->seed(ReferenceDataSeeder::class);
+    $services = [
+        'a' => 'erp_business_applications.01',
+        'b' => 'erp_business_applications.02',
+        'c' => 'automation_ot.01',
+        'd' => 'cloud_infrastructure.01',
+        'e' => 'ai_data_analytics.01',
+    ];
+    $factory = Factory::factory()->inSectors('food')->create();
+    $member = User::factory()->factoryMember($factory)->create();
+    storedReadinessAssessment($factory, readinessChoicesForTotal(20), $member);
+    availableTo($factory, ...array_values($services));
+    $provider = ServiceProvider::factory()->approved()->inSectors('food')->offering(...array_values($services))->create(['name' => 'Plan Provider']);
+
+    return [
+        'factory' => $factory,
+        'member' => $member,
+        'admin' => User::factory()->imcAdmin()->create(),
+        'provider' => $provider,
+        'providerMember' => User::factory()->providerMember($provider)->create(),
+        'services' => $services,
+    ];
+}
+
+/**
+ * A three-stage draft: stage 1 runs A and B in parallel; stage 2 runs C after A, with D in
+ * parallel; stage 3 runs E after C and D. `$assignedProviderId` is assigned to C.
+ *
+ * @param  array{a: string, b: string, c: string, d: string, e: string}  $services
+ * @return array<string, mixed>
+ */
+function planDraftPayload(array $services, int $basedOnRevision = 0, ?int $assignedProviderId = null): array
+{
+    return [
+        'based_on_revision' => $basedOnRevision,
+        'title' => 'خطة التحول الرقمي',
+        'summary_ar' => 'خطة من ثلاث مراحل.',
+        'stages' => [
+            [
+                'name_ar' => 'التأسيس والتجهيز',
+                'objective_ar' => 'بناء الأساس.',
+                'factory_instructions_ar' => 'جهّزوا بيانات الإنتاج.',
+                'internal_notes' => 'ملاحظة داخلية للمرحلة الأولى',
+                'planned_start_date' => '2026-11-01',
+                'planned_end_date' => '2027-01-31',
+                'items' => [
+                    ['service' => $services['a'], 'instructions_ar' => 'ابدأوا بنظام ERP.', 'internal_notes' => 'ملاحظة داخلية للخدمة'],
+                    ['service' => $services['b']],
+                ],
+            ],
+            [
+                'name_ar' => 'التطوير والتكامل',
+                'items' => [
+                    ['service' => $services['c'], 'depends_on' => [$services['a']], 'service_provider_id' => $assignedProviderId],
+                    ['service' => $services['d']],
+                ],
+            ],
+            [
+                'name_ar' => 'التحسين والتوسع',
+                'items' => [
+                    ['service' => $services['e'], 'depends_on' => [$services['c'], $services['d']]],
+                ],
+            ],
+        ],
+    ];
+}
+
+/**
+ * Create, draft and publish the planDraftPayload() plan through the API as the IMC admin.
+ *
+ * @param  array{factory: Factory, member: User, admin: User, provider: ServiceProvider, providerMember: User, services: array{a: string, b: string, c: string, d: string, e: string}}  $fixture
+ */
+function publishedPlan(array $fixture, ?int $assignedProviderId = null): TransformationPlan
+{
+    Sanctum::actingAs($fixture['admin']);
+    $planId = test()->postJson(route('api.v1.factories.transformation-plans.store', $fixture['factory']), ['title' => 'خطة التحول الرقمي'])->assertCreated()->json('data.id');
+    test()->putJson(route('api.v1.transformation-plans.draft.update', $planId), planDraftPayload($fixture['services'], 0, $assignedProviderId))->assertOk();
+    test()->postJson(route('api.v1.transformation-plans.publish', $planId))->assertOk();
+    forgetResolvedUsers();
+
+    return TransformationPlan::query()->findOrFail($planId);
+}
+
+/**
+ * The published item for the service code in the plan.
+ */
+function planItem(TransformationPlan $plan, string $serviceCode): TransformationPlanItem
+{
+    return TransformationPlanItem::query()
+        ->where('transformation_plan_id', $plan->id)
+        ->whereHas('service', fn ($services) => $services->where('code', $serviceCode))
+        ->sole();
 }
 
 /**

@@ -55,6 +55,9 @@ use RuntimeException;
  *   draft on the agreement IMC approved, which the rules allow; drafts are never binding
  *   (OQ-17).
  * - **No documents:** no logo or registration document is fabricated.
+ * - **Level services are demo choices (ADR-025):** IMC makes each readiness level's
+ *   roadmap-recommended catalog services available, plus each scripted request's service
+ *   at the requesting factory's level, through the API. No deployment seeds them.
  * - **Idempotent, create-only:** every demo account uses the `demo.jahez.test` domain. An
  *   organization whose member account exists is skipped with everything scripted for it;
  *   requests are matched by factory and title, promotions by provider, service and
@@ -461,6 +464,7 @@ class DemoDataSeeder extends Seeder
             foreach (self::FACTORIES as $key => $factory) {
                 $this->factories[$key] = $this->factory($key, $factory);
             }
+            $this->levelServices();
             foreach (self::REQUESTS as $serviceRequest) {
                 $this->serviceRequest($serviceRequest);
             }
@@ -705,6 +709,37 @@ class DemoDataSeeder extends Seeder
                 };
             }
         });
+    }
+
+    /**
+     * Demo choices only (ADR-025): the services each readiness level makes available, set
+     * by the IMC reviewer through the API. A repeated call changes nothing.
+     */
+    private function levelServices(): void
+    {
+        $pairs = [];
+
+        foreach (ReadinessQuestionnaire::query()->where('is_current', true)->sole()->categories()->with('recommendations.services')->get() as $category) {
+            foreach ($category->recommendations as $recommendation) {
+                foreach ($recommendation->services as $service) {
+                    $pairs["{$category->code->value}/services/{$service->id}"] = true;
+                }
+            }
+        }
+
+        foreach (self::REQUESTS as $request) {
+            $level = $this->factories[$request['factory']]->currentReadinessAssessment()->with('category')->first()?->category?->code->value;
+
+            if ($level !== null) {
+                $pairs[$level.'/services/'.CatalogService::query()->where('code', $request['service'])->value('id')] = true;
+            }
+        }
+
+        $this->at(250);
+
+        foreach (array_keys($pairs) as $pair) {
+            $this->api($this->reviewer, 'PUT', "readiness-levels/{$pair}", ['is_active' => true]);
+        }
     }
 
     private function promotion(string $providerKey, string $service, string $headline, int $priority, int $createdDaysAgo, int $startsAfter, int $endsAfter, ?int $endedDaysAgo): void

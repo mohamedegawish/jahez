@@ -12,11 +12,14 @@ use Database\Seeders\ReferenceDataSeeder;
 use Laravel\Sanctum\Sanctum;
 
 /**
- * A signed-in member of a new food-sector factory.
+ * A signed-in member of a new food-sector factory whose readiness level has the ERP
+ * service (ADR-025). Requires the reference data.
  */
 function foodFactoryMember(): User
 {
-    $member = User::factory()->factoryMember(Factory::factory()->inSectors('food')->create())->create();
+    $factory = Factory::factory()->inSectors('food')->create();
+    availableTo($factory, 'erp_business_applications.01');
+    $member = User::factory()->factoryMember($factory)->create();
     Sanctum::actingAs($member);
 
     return $member;
@@ -115,13 +118,14 @@ describe('store', function () {
         $this->assertDatabaseCount('provider_requests', 0);
     });
 
-    it('share-locks the factory and the chosen providers while saving, so an approval decision waits for the request', function () {
+    it('share-locks the factory, the service\'s level availability and the chosen providers while saving, so an IMC decision waits for the request', function () {
         foodFactoryMember();
         $provider = ServiceProvider::factory()->approved()->inSectors('food')->offering('erp_business_applications.01')->create();
 
         $reads = lockingReads(fn () => $this->postJson(route('api.v1.service-requests.store'), serviceRequestPayload([$provider->id]))->assertCreated());
 
-        expect($reads)->toBe(['factories:share', 'service_providers:share']);
+        // ADR-025: the readiness level row is share-locked between the factory and the providers.
+        expect($reads)->toBe(['factories:share', 'readiness_level_services:share', 'service_providers:share']);
     });
 
     it('rejects an invalid request with 422', function (Closure $payload, string $field) {
@@ -309,7 +313,8 @@ describe('adding providers (PROPOSED, OQ-38)', function () {
 
         $reads = lockingReads(fn () => $this->postJson(route('api.v1.service-requests.providers.store', $serviceRequest), ['provider_ids' => [$newcomer->id]])->assertOk());
 
-        expect($reads)->toBe(['service_requests:update', 'factories:share', 'service_providers:share']);
+        // ADR-025: the readiness level row of the service is share-locked before the providers.
+        expect($reads)->toBe(['service_requests:update', 'factories:share', 'readiness_level_services:share', 'service_providers:share']);
     });
 
     it('returns 403 to IMC and to providers on the request, and 404 to another factory, before validation', function (Closure $makeUser, int $status) {

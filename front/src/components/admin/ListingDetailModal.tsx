@@ -6,13 +6,27 @@ import type { AuditLogEntry, ServiceListing, ServiceListingStatus } from '../../
 import { useApiQuery } from '../../hooks/useApiQuery';
 import { formatDate, formatDateTime } from '../../lib/format';
 import { approvalLabel, listingStatusLabel } from '../../lib/labels';
+import { PackageList } from '../listings/PackageList';
 import { ListingStatusBadge } from '../ui/ApprovalBadge';
 import { Button } from '../ui/Button';
 import { CardSkeleton } from '../ui/LoadingState';
 import { Modal } from '../ui/Modal';
 import { QueryBoundary } from '../ui/QueryBoundary';
 
-const EVENTS = ['service_listing.reviewed', 'service_listing.resubmitted'] as const;
+const EVENTS = ['service_listing.reviewed', 'service_listing.resubmitted', 'service_listing.packages_updated'] as const;
+
+const EVENT_LABEL: Record<string, string> = {
+  'service_listing.resubmitted': 'أعاد المزود التقديم',
+  'service_listing.packages_updated': 'حدّث المزود الباقات والأسعار',
+};
+
+/** `from`/`to` of a decision, or of the status change a package update caused (ADR-027). */
+function statusChange(metadata: Record<string, unknown> | null | undefined): { from: string | null; to: string | null } {
+  const nested = metadata?.status as { from?: unknown; to?: unknown } | undefined;
+  const from = typeof metadata?.from === 'string' ? metadata.from : typeof nested?.from === 'string' ? nested.from : null;
+  const to = typeof metadata?.to === 'string' ? metadata.to : typeof nested?.to === 'string' ? nested.to : null;
+  return { from, to };
+}
 
 /**
  * One provider listing for IMC: the catalog service, the provider, IMC's review of the listing, its
@@ -78,6 +92,12 @@ export const ListingDetailModal: React.FC<{ listing: ServiceListing; onClose: ()
           </div>
         )}
 
+        <div>
+          <h4 className="font-bold text-[#172033] mb-1">الباقات والأسعار المعلنة</h4>
+          <p className="text-[#98A2B3] mb-2">يراجعها المركز مع الخدمة؛ أي تعديل من المزود يعيد الخدمة إلى المراجعة. الأسعار للاسترشاد ولا يتم دفع عبر المنصة.</p>
+          <PackageList packages={listing.packages} />
+        </div>
+
         {listing.provider?.description && (
           <div>
             <h4 className="font-bold text-[#172033] mb-1">نبذة المزود</h4>
@@ -102,14 +122,13 @@ export const ListingDetailModal: React.FC<{ listing: ServiceListing; onClose: ()
             {(entries) => (
               <ol className="space-y-2" data-testid="listing-history">
                 {entries.map((entry) => {
-                  const from = typeof entry.metadata?.from === 'string' ? entry.metadata.from : null;
-                  const to = typeof entry.metadata?.to === 'string' ? entry.metadata.to : null;
+                  const { from, to } = statusChange(entry.metadata);
                   const text = typeof entry.metadata?.reason === 'string' ? entry.metadata.reason : typeof entry.metadata?.note === 'string' ? entry.metadata.note : null;
                   return (
                     <li key={entry.id} className="p-2.5 rounded-lg border border-[#E6EAF0] bg-white">
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <span className="font-semibold text-[#172033]">
-                          {entry.event === 'service_listing.resubmitted' ? 'أعاد المزود التقديم' : 'قرار المركز'}
+                          {EVENT_LABEL[entry.event] ?? 'قرار المركز'}
                           {from && to ? `: ${listingStatusLabel(from as ServiceListingStatus)} ← ${listingStatusLabel(to as ServiceListingStatus)}` : ''}
                         </span>
                         <span className="text-[#98A2B3]">{formatDateTime(entry.created_at)}</span>

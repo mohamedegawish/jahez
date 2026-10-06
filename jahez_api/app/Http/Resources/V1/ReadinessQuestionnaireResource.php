@@ -16,6 +16,10 @@ use Illuminate\Http\Resources\Json\JsonResource;
  * choice ids; the server calculates the score. Expects pillars.questions.choices and
  * categories.recommendations.services.category to be loaded.
  *
+ * The points, the score range and the category ranges go to IMC administrators only
+ * (ReadinessAssessmentResource::showsScores()): a factory answers without seeing what
+ * each choice is worth and is shown its level, never a score (ADR-026).
+ *
  * @mixin ReadinessQuestionnaire
  */
 class ReadinessQuestionnaireResource extends JsonResource
@@ -28,13 +32,16 @@ class ReadinessQuestionnaireResource extends JsonResource
     public function toArray(Request $request): array
     {
         $questions = $this->pillars->flatMap(fn (ReadinessPillar $pillar) => $pillar->questions);
+        $withScores = ReadinessAssessmentResource::showsScores($request);
 
         return [
             'version' => $this->version,
             'title_ar' => $this->title_ar,
             'title_en' => $this->title_en,
-            'min_score' => (int) $questions->sum(fn (ReadinessQuestion $question): int => (int) $question->choices->min('points')),
-            'max_score' => (int) $questions->sum(fn (ReadinessQuestion $question): int => (int) $question->choices->max('points')),
+            ...($withScores ? [
+                'min_score' => (int) $questions->sum(fn (ReadinessQuestion $question): int => (int) $question->choices->min('points')),
+                'max_score' => (int) $questions->sum(fn (ReadinessQuestion $question): int => (int) $question->choices->max('points')),
+            ] : []),
             'pillars' => $this->pillars->map(fn (ReadinessPillar $pillar): array => [
                 'code' => $pillar->code,
                 'name_ar' => $pillar->name_ar,
@@ -49,7 +56,7 @@ class ReadinessQuestionnaireResource extends JsonResource
                         'code' => $choice->code,
                         'label_ar' => $choice->label_ar,
                         'text_ar' => $choice->text_ar,
-                        'points' => $choice->points,
+                        ...($withScores ? ['points' => $choice->points] : []),
                     ])->all(),
                 ])->all(),
             ])->all(),

@@ -1,7 +1,6 @@
 <?php
 
 use App\Enums\ProviderRequestStatus;
-use App\Models\Factory;
 use App\Models\ProviderRequest;
 use App\Models\ServiceProvider;
 use App\Models\User;
@@ -179,7 +178,7 @@ describe('history', function () {
 
     it('starts with the creation, and shows a closure caused by the factory', function () {
         $this->seed(ReferenceDataSeeder::class);
-        $member = User::factory()->factoryMember(Factory::factory()->inSectors('food')->create())->create();
+        $member = User::factory()->factoryMember(factoryWithEveryService('food'))->create();
         $provider = ServiceProvider::factory()->approved()->inSectors('food')->offering('erp_business_applications.01')->create();
         Sanctum::actingAs($member);
         $requestId = $this->postJson(route('api.v1.service-requests.store'), [

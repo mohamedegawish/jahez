@@ -2,7 +2,11 @@
 
 Decisions that need owner (business, product, legal or technical) input. **Do not guess any of these in code.** Where work must proceed first, use the "Interim safe behaviour" and document it as unapproved.
 
-Status as of 2026-10-04 (financial policies, [ADR-023](decisions/ADR-023-financial-and-contract-policies.md)): OQ-15, OQ-16 and OQ-17 are **still open**. IMC can now enter and approve their answers as versioned policies, but none is entered or approved, and nothing here records an answer. **OQ-47 to OQ-50** were added.
+Status as of 2026-10-06 (listing packages and the factory cart, [ADR-027](decisions/ADR-027-listing-packages-and-cart.md)): **OQ-57** was added. Earlier the same day (cumulative levels and plan-based progression, [ADR-026](decisions/ADR-026-cumulative-levels-and-progression.md)): **OQ-56** was added; OQ-52's interim now also opens the next readiness level.
+
+Earlier status, 2026-10-05 (readiness eligibility and transformation plans, [ADR-025](decisions/ADR-025-readiness-eligibility-and-transformation-plans.md)): **OQ-52 to OQ-55** were added; **OQ-12** is partly answered.
+
+Earlier status, 2026-10-04 (financial policies, [ADR-023](decisions/ADR-023-financial-and-contract-policies.md)): OQ-15, OQ-16 and OQ-17 are **still open**. IMC can now enter and approve their answers as versioned policies, but none is entered or approved, and nothing here records an answer. **OQ-47 to OQ-50** were added.
 
 Earlier status, 2026-10-03 (readiness assessment, [ADR-018](decisions/ADR-018-digital-readiness-assessment.md)): **OQ-06** and **OQ-07** are answered for the readiness categories by the owner-supplied framework document; **OQ-08** and **OQ-12** are partly answered; **OQ-41** and **OQ-42** were added; OQ-32 lists two more items.
 
@@ -23,7 +27,7 @@ Earlier status (Phases 4–7). **OQ-01** (the workbook was in the repository all
 | [OQ-09](#oq-09) | Enforce "foundation before digital"? Manual override? | Business | High | P5, P6 |
 | [OQ-10](#oq-10) | Infrastructure & cyber audit data to capture | IMC experts | Medium | P5 |
 | [OQ-11](#oq-11) | Baseline indicators, units, 6/12-month measurement | Business / IMC experts | High | P5, P8 |
-| [OQ-12](#oq-12) | Roadmap structure, author, approval (**partly answered:** a focus, steps and services per readiness category) | Business | Medium | 2–3-year roadmaps |
+| [OQ-12](#oq-12) | Roadmap structure, author, approval (**partly answered:** a focus, steps and services per readiness category; per-factory plans by IMC, ADR-025) | Business | Medium | 2–3-year roadmaps |
 | [OQ-13](#oq-13) | Provider evaluation scoring scale, pass mark, evaluators | Business | High | P4 |
 | [OQ-14](#oq-14) | Per-level provider requirements: gates or inputs; evidence | Business | High | P4 |
 | [OQ-15](#oq-15) | Revenue-share rule (conflicting figures) | Business / Finance / Legal | **Blocker** for P7 | P7 |
@@ -59,6 +63,12 @@ Earlier status (Phases 4–7). **OQ-01** (the workbook was in the repository all
 | [OQ-48](#oq-48) | Which date decides the revenue share of an invoice: agreement conclusion or invoice issue? | Finance | High | Revenue share on invoices |
 | [OQ-49](#oq-49) | Who may prepare, approve and record payments under the financial policies? | Business / IMC | High | Granting `financial_policies.*`, `payments.record` |
 | [OQ-50](#oq-50) | Retroactive amendments, credit notes and voiding of issued invoices | Finance / Legal | High | Correcting issued invoices and approved policies |
+| [OQ-52](#oq-52) | Who reports the execution of a plan item (start, completion) and on what evidence? (**interim: IMC records it**) | Business / IMC | High | Provider- or factory-reported execution, completion evidence |
+| [OQ-53](#oq-53) | Plans and open requests when a factory's readiness level changes | Business | Medium | Automatic plan review |
+| [OQ-54](#oq-54) | An assigned provider that declines or becomes ineligible | Business | Medium | Factory choosing another provider for an assigned item |
+| [OQ-55](#oq-55) | Planned dates, costs and owners in a transformation plan | Business | Low | Dates as commitments, costs, acknowledgement |
+| [OQ-56](#oq-56) | Can an opened readiness level be closed again (lower reassessment, IMC correction)? (**interim: never closed**) | Business / IMC | Medium | Revoking an opened level |
+| [OQ-57](#oq-57) | Listed package prices: binding? tax-inclusive? visible to IMC on requests? (**interim: informational, not binding, parties only**) | Business / Finance | Medium | Binding price lists, checkout with payment |
 
 ## Details
 
@@ -159,6 +169,7 @@ Earlier status (Phases 4–7). **OQ-01** (the workbook was in the repository all
 
 - **Question:** What does a 2–3-year roadmap contain (phases, services or levels, timelines, owners, estimated cost)? Who writes it, who approves it, and can the factory see or comment on it?
 - **Partly answered 2026-10-03:** the framework document's §5 «خارطة الطريق للتوصيات» gives each readiness category a focus, steps and recommended services. The platform shows these with every result ([ADR-018](decisions/ADR-018-digital-readiness-assessment.md)). Still open: a per-factory 2–3-year plan with timelines, owners and approval.
+- **Partly answered 2026-10-05 ([ADR-025](decisions/ADR-025-readiness-eligibility-and-transformation-plans.md)):** IMC writes a per-factory plan: ordered stages, services with finish-to-start dependencies and parallel groups, optional assigned providers and planned dates, drafted, reviewed, published in versions; the factory reads the published version. Still open: who reports execution (OQ-52), dates as commitments, costs and owners (OQ-55).
 
 <a id="oq-13"></a>
 ### OQ-13: Provider evaluation mechanics
@@ -461,3 +472,63 @@ Earlier status (Phases 4–7). **OQ-01** (the workbook was in the repository all
 - **Context (ADR-018 addendum 2):** assessments and their answers are append-only; a factory's level changes only when its members submit a new assessment. The owner brief allows an exceptional correction only through an explicit, permission-controlled and audited workflow, and forbids changing a score or level to obtain an approval.
 - **Question:** Is a correction ever allowed (for example an assessment submitted by mistake)? Who may make it, with what evidence, and does it void the assessment or require the factory to resubmit? Must the factory be told?
 - **Interim (owner decision, 2026-10-04):** not built. No endpoint or permission changes a stored score, level or answer.
+
+<a id="oq-52"></a>
+### OQ-52: Who reports the execution of a transformation plan item, and on what evidence?
+
+- **Context ([ADR-025](decisions/ADR-025-readiness-eligibility-and-transformation-plans.md)):** the marketplace ends at an agreement, IMC's review and a non-binding contract draft; nothing records the delivery or completion of a service. The brief asks the plan to show when a service starts and completes, and forbids treating a sent request as a start.
+- **Questions:** Who records that a service has started and completed: IMC, the provider, the factory, or a combination (for example the provider reports and the factory or IMC confirms)? What evidence is required (deliverables, acceptance certificate, site visit)? May a completed item be corrected, and by whom? Should completion depend on a signed contract (OQ-17) or on payment (OQ-16)?
+- **Interim (owner decision, 2026-10-05):** IMC administrators with `transformation_plans.manage` record start, completion, hold, resume, cancellation and reopening, with an optional reason that is audited. A start needs completed prerequisites and an IMC-approved agreement on the item's request. A completed item is final. Factories and providers read the status only.
+- **Since 2026-10-06 (ADR-026):** these completions also open the factory's next readiness level once every service of its level in the published plan is completed, so the evidence question now also decides when a factory moves up.
+
+<a id="oq-53"></a>
+### OQ-53: What happens to a plan and to open requests when a factory's readiness level changes?
+
+- **Context (ADR-025):** a factory's level changes only with a new assessment (ADR-018), and the services each level makes available can also change.
+- **Questions:** Should the plan be reviewed automatically, suspended, or left in force? May the factory keep requesting a planned service its new level no longer makes available? Should open requests for such services continue?
+- **Interim (PROPOSED):** nothing is rewritten. The published plan stays in force; items whose service is no longer available show `service_available = false` and cannot be requested; IMC sees a `readiness_changed` warning and may publish a new version or close the plan. Open requests and agreements continue; only new requests and added providers are checked against the current level.
+
+<a id="oq-54"></a>
+### OQ-54: An assigned provider that declines or becomes ineligible
+
+- **Context (ADR-025, owner decision):** a provider IMC assigns to a plan item is binding for the factory's request.
+- **Questions:** When the assigned provider declines, is suspended or loses its listing, may the factory choose another eligible provider, or must IMC reassign? Is there a deadline for IMC to act?
+- **Interim:** the factory may only send to (or add) the assigned provider. IMC sees `no_active_provider` on the item and changes the assignment by publishing a new version; the factory may then add the new provider to its open request or send a new one after cancelling.
+
+<a id="oq-55"></a>
+### OQ-55: Planned dates, costs and owners in a transformation plan
+
+- **Context (OQ-12, ADR-025):** stages and items carry optional planned start and end dates, informational only.
+- **Questions:** Are plan dates commitments (with alerts or SLAs)? Should a plan show estimated costs, funding sources or a responsible person per stage? Must the factory acknowledge or comment on a plan?
+- **Interim:** dates are optional and informational; no cost, owner, acknowledgement or comment is stored.
+
+<a id="oq-56"></a>
+### OQ-56: Can an opened readiness level be closed again?
+
+- **Context ([ADR-026](decisions/ADR-026-cumulative-levels-and-progression.md), owner decisions 2026-10-06):**
+  - levels are cumulative;
+  - completing every service of the factory's level in its published plan opens the next level;
+  - the factory then works at the highest of its assessed and opened levels.
+- **Questions:**
+  - Should a later self-assessment with a lower result take an opened level away?
+  - May IMC correct an opened level, for example when a completion was recorded by mistake (see OQ-52)?
+  - Should adding a service to a lower level after the opening require the factory to complete it first?
+- **Interim (PROPOSED):**
+  - an opened level is never closed: no endpoint removes it, and the table is append-only;
+  - a lower reassessment changes the assessed category but not the level the factory works at;
+  - a higher reassessment raises it;
+  - open requests are unaffected, as in OQ-53.
+
+<a id="oq-57"></a>
+### OQ-57: Listed package prices and the cart
+
+- **Context ([ADR-027](decisions/ADR-027-listing-packages-and-cart.md), owner request 2026-10-06):** providers list packages with monthly and annual prices and a number of users; factories collect listings in a cart and send one request per service; each thread keeps a copy of the choice.
+- **Questions:**
+  - Are listed prices binding, or only indicative until an offer?
+  - Do they include tax and fees (OQ-16)?
+  - Should a checkout ever lead to payment (OQ-15, OQ-16) or a contract (OQ-17)?
+  - Should IMC see which package a factory chose?
+- **Interim (PROPOSED):**
+  - listed prices are informational EGP amounts, reviewed with the listing, never copied into offers, agreements or invoices;
+  - the cart only sends requests;
+  - the selection is shown to the factory and the provider only.

@@ -41,9 +41,9 @@ export const OnboardingSteps: React.FC<{ factory: Factory; alwaysShow?: boolean 
     },
     {
       title: 'تقييم الجاهزية الرقمية',
-      desc: assessed ? `الفئة الحالية: ${factory.current_readiness?.category?.name_ar ?? '-'}` : '10 أسئلة؛ يحسب الخادم الدرجة والفئة.',
+      desc: assessed ? `المستوى الحالي: ${factory.readiness_level?.name_ar ?? '-'}` : '10 أسئلة؛ يحدد النظام مستوى جاهزية منشأتكم.',
       done: assessed,
-      action: { label: assessed ? 'عرض النتيجة' : 'بدء التقييم', to: '/factory/assessment' },
+      action: { label: assessed ? 'عرض المستوى' : 'بدء التقييم', to: '/factory/assessment' },
     },
     {
       title: 'سوق الخدمات',

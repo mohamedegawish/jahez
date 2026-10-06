@@ -1,12 +1,14 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ClipboardCheck, Compass, Eye, Handshake, Send } from 'lucide-react';
+import { CheckCircle2, ClipboardCheck, Compass, Eye, Handshake, Send, ShoppingCart } from 'lucide-react';
 import { api } from '../../api';
 import type { ServiceListing } from '../../api';
 import { useApiQuery } from '../../hooks/useApiQuery';
 import { toApiQuery, useListParams, useSearchBox } from '../../hooks/useListParams';
 import { useCatalogCategories } from '../../hooks/useReference';
+import { AddToCartModal } from '../../components/factory/AddToCartModal';
 import { RequestFormModal } from '../../components/factory/RequestFormModal';
+import { PackageList } from '../../components/listings/PackageList';
 import { ServiceListingCard } from '../../components/listings/ServiceListingCard';
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
@@ -25,7 +27,8 @@ const chip = (active: boolean) =>
 
 /**
  * The services available to this factory: one card per eligible provider listing (approved provider,
- * one of the factory's sectors, offering the service). IMC promotions come first and are labelled
+ * one of the factory's sectors, an approved listing of a service IMC made available to the factory's
+ * readiness level; jahez_api ADR-025). IMC promotions come first and are labelled
  * «إعلان»; they never add a listing the factory is not eligible for. The order, eligibility and
  * pagination all come from the API.
  */
@@ -35,6 +38,17 @@ export const FactoryServices: React.FC = () => {
   const search = useSearchBox(list.search, list.setSearch);
   const categories = useCatalogCategories();
   const [requesting, setRequesting] = useState<ServiceListing | null>(null);
+  // ADR-027: the cart collects provider offers; one request per service is sent from it.
+  const [carting, setCarting] = useState<ServiceListing | null>(null);
+  const [cartCount, setCartCount] = useState<number | null>(null);
+  const cart = useApiQuery((signal) => api.cart.get(signal), []);
+  const inCart = cartCount ?? cart.data?.summary.items_count ?? 0;
+  const [justAdded, setJustAdded] = useState(false);
+  useEffect(() => {
+    if (!justAdded) return;
+    const timer = window.setTimeout(() => setJustAdded(false), 4000);
+    return () => window.clearTimeout(timer);
+  }, [justAdded]);
 
   const listings = useApiQuery(
     (signal) =>
@@ -53,6 +67,8 @@ export const FactoryServices: React.FC = () => {
 
   const meta = listings.data?.meta;
   const assessed = Boolean(meta?.readiness);
+  // ADR-025: the API makes no service available before the factory's first readiness assessment.
+  const noAssessment = meta?.eligibility_status === 'no_assessment';
 
   return (
     <div className="space-y-6">
@@ -67,6 +83,9 @@ export const FactoryServices: React.FC = () => {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <Button variant="primary" size="sm" icon={ShoppingCart} onClick={() => navigate('/factory/cart')} data-action="open-cart">
+            سلة الطلبات ({inCart})
+          </Button>
           <Button variant="outline" size="sm" icon={Compass} onClick={() => navigate('/factory/catalog')}>
             الكتالوج الكامل
           </Button>
@@ -81,7 +100,7 @@ export const FactoryServices: React.FC = () => {
           <div className="text-xs">
             <div className="font-bold text-[#172033] text-sm">لم تُكمل منشأتكم تقييم الجاهزية الرقمية بعد</div>
             <p className="text-[#667085] mt-0.5">
-              يحدد التقييم فئة جاهزيتكم والخدمات الموصى بها لخارطة طريقكم. تظهر الخدمات المتاحة أدناه، لكن لا تُحدَّد التوصيات قبل التقييم.
+              يحدد التقييم مستوى جاهزيتكم، والخدمات المتاحة لمنشأتكم مرتبطة بهذا المستوى كما تحددها الوزارة. لن تظهر أي خدمة قبل إكمال التقييم.
             </p>
           </div>
           <Button variant="primary" size="sm" icon={ClipboardCheck} onClick={() => navigate('/factory/assessment')}>
@@ -89,9 +108,9 @@ export const FactoryServices: React.FC = () => {
           </Button>
         </div>
       )}
-      {assessed && meta?.readiness?.category && (
+      {assessed && meta?.readiness?.name_ar && (
         <div className="p-3 rounded-xl bg-[#F7F9FC] border border-[#E6EAF0] text-xs text-[#667085]">
-          فئة الجاهزية الحالية: <strong className="text-[#5146A5]">{meta.readiness.category.name_ar}</strong> ({meta.readiness.total_score} من 40). فعّل «الموصى بها» لعرض خدمات خارطة طريقكم فقط.
+          مستوى الجاهزية الحالي: <strong className="text-[#5146A5]">{meta.readiness.name_ar}</strong>. تظهر هنا الخدمات التي أتاحتها الوزارة لهذا المستوى وللمستويات السابقة له، من مزودين معتمدين في قطاعاتكم. عند إتمام خدمات مستواكم في خطة التحول يُفتح لكم المستوى التالي. فعّل «الموصى بها» لعرض خدمات خارطة طريقكم فقط.
         </div>
       )}
 
@@ -141,6 +160,13 @@ export const FactoryServices: React.FC = () => {
         empty={
           list.page > 1 ? (
             <EmptyState title="هذه الصفحة فارغة" description="رقم الصفحة المطلوب يتجاوز عدد الصفحات المتاحة." actionText="العودة إلى الصفحة الأولى" onAction={() => list.setPage(1)} />
+          ) : noAssessment ? (
+            <EmptyState
+              title="أكملوا تقييم الجاهزية الرقمية لعرض الخدمات"
+              description="تحدد الوزارة الخدمات المتاحة لكل مستوى جاهزية، ويُحسب مستواكم من التقييم. بعد إكماله تظهر الخدمات المتاحة لمستواكم ومزودوها المؤهلون."
+              actionText="ابدأ التقييم"
+              onAction={() => navigate('/factory/assessment')}
+            />
           ) : meta?.has_sectors === false ? (
             <EmptyState
               title="حدّدوا قطاعات منشأتكم أولًا"
@@ -153,8 +179,8 @@ export const FactoryServices: React.FC = () => {
           ) : (
             <EmptyState
               title="لا توجد خدمات متاحة لمنشأتكم حاليًا"
-              description="لا يوجد مزود معتمد يقدم خدمات في قطاعات منشأتكم بعد. تصفحوا الكتالوج الكامل أو عودوا لاحقًا بعد اعتماد مزودين جدد."
-              actionText="الكتالوج الكامل"
+              description="لا يوجد بعد مزود معتمد يقدم في قطاعات منشأتكم خدمةً أتاحتها الوزارة لمستوى جاهزيتكم. تصفحوا خدمات مستواكم أو عودوا لاحقًا."
+              actionText="خدمات مستواكم"
               onAction={() => navigate('/factory/catalog')}
             />
           )
@@ -173,13 +199,17 @@ export const FactoryServices: React.FC = () => {
                   listing={listing}
                   detailsPath={`/factory/services/${listing.service?.id}`}
                   footer={
-                    <div className="flex items-center gap-2">
-                      <Button variant="outline" size="sm" icon={Eye} className="flex-1" onClick={() => navigate(`/factory/services/${listing.service?.id}`)}>
-                        التفاصيل
-                      </Button>
-                      <Button variant="primary" size="sm" icon={Send} className="flex-1" data-action="request" onClick={() => setRequesting(listing)}>
-                        طلب الخدمة
-                      </Button>
+                    <div className="space-y-2">
+                      <PackageList packages={listing.packages} compact />
+                      <div className="flex items-center gap-2">
+                        <Button variant="outline" size="sm" icon={Eye} onClick={() => navigate(`/factory/services/${listing.service?.id}`)} aria-label="التفاصيل" />
+                        <Button variant="outline" size="sm" icon={Send} className="flex-1" data-action="request" onClick={() => setRequesting(listing)}>
+                          طلب مباشر
+                        </Button>
+                        <Button variant="primary" size="sm" icon={ShoppingCart} className="flex-1" data-action="add-to-cart" onClick={() => setCarting(listing)}>
+                          أضف للسلة
+                        </Button>
+                      </div>
                     </div>
                   }
                 />
@@ -189,6 +219,27 @@ export const FactoryServices: React.FC = () => {
           </div>
         )}
       </QueryBoundary>
+
+      {justAdded && (
+        <div role="status" className="fixed bottom-6 left-6 z-40 p-3 rounded-xl bg-[#E7F8EE] border border-[#C5F0D5] text-xs font-semibold text-[#1D7E4C] shadow-md flex items-center gap-2">
+          <CheckCircle2 className="w-4 h-4" /> أُضيف العرض إلى السلة.
+          <button type="button" className="underline cursor-pointer" onClick={() => navigate('/factory/cart')}>
+            عرض السلة
+          </button>
+        </div>
+      )}
+
+      {carting?.service && carting.provider && (
+        <AddToCartModal
+          listing={carting}
+          onClose={() => setCarting(null)}
+          onAdded={(updated) => {
+            setCarting(null);
+            setCartCount(updated.summary.items_count);
+            setJustAdded(true);
+          }}
+        />
+      )}
 
       {requesting?.service && requesting.provider && (
         <RequestFormModal

@@ -28,12 +28,12 @@ class FactoryController extends Controller
     /**
      * Relations the factory resource shows.
      */
-    public const RELATIONS = ['sectors', 'activeDocuments', 'currentReadinessAssessment.questionnaire', 'currentReadinessAssessment.category'];
+    public const RELATIONS = ['sectors', 'activeDocuments', 'currentReadinessAssessment.questionnaire', 'currentReadinessAssessment.category', 'readinessLevelUnlocks'];
 
     /**
      * Relations of the list card (FactorySummaryResource): only the logo document.
      */
-    private const SUMMARY_RELATIONS = ['sectors', 'currentReadinessAssessment.questionnaire', 'currentReadinessAssessment.category'];
+    private const SUMMARY_RELATIONS = ['sectors', 'currentReadinessAssessment.questionnaire', 'currentReadinessAssessment.category', 'readinessLevelUnlocks'];
 
     public function index(ListFactoriesRequest $request): AnonymousResourceCollection
     {

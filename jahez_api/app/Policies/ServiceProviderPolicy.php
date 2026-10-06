@@ -84,6 +84,20 @@ class ServiceProviderPolicy
     }
 
     /**
+     * Replace the packages and prices of one of the provider's listings (ADR-027): the
+     * provider's own members. The change sends the listing back to IMC review; IMC
+     * administrators review it but never write a provider's prices.
+     */
+    public function updateListingPackages(User $user, ServiceProvider $serviceProvider): Response
+    {
+        if ($user->serviceProvider()->is($serviceProvider)) {
+            return Response::allow();
+        }
+
+        return $user->hasPermission(Permission::ServiceProvidersViewAny) ? Response::deny() : Response::denyAsNotFound();
+    }
+
+    /**
      * Ask IMC to review the provider again after a rejection: the provider's own members
      * (PROPOSED). IMC administrators decide through the approval action instead.
      */

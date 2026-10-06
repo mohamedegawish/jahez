@@ -36,6 +36,16 @@ enum ServiceListingStatus: string
     }
 
     /**
+     * Whether the provider may change the listing's packages and prices (ADR-027). The
+     * change sends an approved or rejected listing back to review; a suspension is IMC's
+     * to lift, so a suspended listing keeps its packages until IMC approves it again.
+     */
+    public function allowsPackageChange(): bool
+    {
+        return $this !== self::Suspended;
+    }
+
+    /**
      * Whether the decision must be explained.
      */
     public function requiresReason(): bool

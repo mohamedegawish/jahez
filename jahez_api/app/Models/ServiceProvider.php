@@ -155,6 +155,17 @@ class ServiceProvider extends Model
     }
 
     /**
+     * The packages and prices of every listing of the provider (ADR-027), in display
+     * order; grouped by catalog service where shown.
+     *
+     * @return HasMany<ServiceListingPackage, $this>
+     */
+    public function listingPackages(): HasMany
+    {
+        return $this->hasMany(ServiceListingPackage::class)->orderBy('catalog_service_id')->orderBy('position');
+    }
+
+    /**
      * The listings IMC approved: the only services factories see the provider offering.
      *
      * @return BelongsToMany<CatalogService, $this>

@@ -4,6 +4,7 @@ use App\Billing\PolicyCalendar;
 use App\Enums\AuditEvent;
 use App\Enums\FactoryApprovalStatus;
 use App\Enums\Permission;
+use App\Enums\PlanItemExecutionStatus;
 use App\Enums\ProviderApprovalStatus;
 use App\Enums\ProviderRequestStatus;
 use App\Enums\ServiceListingStatus;
@@ -254,7 +255,7 @@ describe('organizations', function () {
 describe('marketplace', function () {
     it('records a service request with its service and providers', function () {
         $this->seed(ReferenceDataSeeder::class);
-        $member = User::factory()->factoryMember(Factory::factory()->inSectors('food')->create())->create();
+        $member = User::factory()->factoryMember(factoryWithEveryService('food'))->create();
         $provider = ServiceProvider::factory()->approved()->inSectors('food')->offering('erp_business_applications.01')->create();
         Sanctum::actingAs($member);
 
@@ -673,5 +674,109 @@ describe('financial policies (ADR-023)', function () {
 
         $this->assertDatabaseCount('financial_policies', 0);
         $this->assertDatabaseCount('financial_policy_versions', 0);
+    });
+});
+
+describe('readiness level services and transformation plans (ADR-025)', function () {
+    it('records a level service assigned, switched off and removed, with the level and the service only', function () {
+        $this->seed(ReferenceDataSeeder::class);
+        $admin = User::factory()->imcAdmin()->create();
+        $erp = CatalogService::query()->where('code', 'erp_business_applications.01')->sole();
+        Sanctum::actingAs($admin);
+
+        $this->putJson(route('api.v1.readiness-levels.services.update', ['basic', $erp]))->assertCreated();
+        $this->putJson(route('api.v1.readiness-levels.services.update', ['basic', $erp]), ['is_active' => false])->assertOk();
+        $this->deleteJson(route('api.v1.readiness-levels.services.destroy', ['basic', $erp]))->assertNoContent();
+
+        $assigned = onlyAuditEntry(AuditEvent::ReadinessLevelServiceAssigned);
+        expect($assigned->metadata)->toEqual(['level' => 'basic', 'service' => 'erp_business_applications.01', 'is_active' => true])
+            ->and($assigned->actor_user_id)->toBe($admin->id)
+            ->and($assigned->subject_type)->toBe('catalog_service')
+            ->and($assigned->subject_id)->toBe($erp->id)
+            ->and(onlyAuditEntry(AuditEvent::ReadinessLevelServiceUpdated)->metadata)->toEqual(['level' => 'basic', 'service' => 'erp_business_applications.01', 'is_active' => ['from' => true, 'to' => false]])
+            ->and(onlyAuditEntry(AuditEvent::ReadinessLevelServiceRemoved)->metadata)->toEqual(['level' => 'basic', 'service' => 'erp_business_applications.01', 'was_active' => false]);
+    });
+
+    it('records a plan from creation to publication, revision, item execution and closure, never its notes', function () {
+        $fixture = planFixture();
+        $plan = publishedPlan($fixture);
+        $admin = $fixture['admin'];
+        Sanctum::actingAs($admin);
+
+        $this->postJson(route('api.v1.transformation-plans.draft.store', $plan))->assertCreated();
+        $this->deleteJson(route('api.v1.transformation-plans.draft.destroy', $plan))->assertOk();
+        $this->postJson(route('api.v1.transformation-plans.items.hold', [$plan, planItem($plan, $fixture['services']['a'])]), ['reason' => 'بانتظار الميزانية'])->assertOk();
+        $this->postJson(route('api.v1.transformation-plans.close', $plan), ['reason' => 'اكتملت المراجعة'])->assertOk();
+
+        $created = onlyAuditEntry(AuditEvent::TransformationPlanCreated);
+        expect($created->subject_type)->toBe('transformation_plan')
+            ->and($created->subject_id)->toBe($plan->id)
+            ->and($created->actor_user_id)->toBe($admin->id)
+            ->and($created->metadata)->toEqual(['factory_id' => $fixture['factory']->id, 'readiness_assessment_id' => $plan->based_on_readiness_assessment_id, 'level' => 'basic'])
+            ->and(onlyAuditEntry(AuditEvent::TransformationPlanDraftSaved)->metadata)->toEqual(['version' => 1, 'revision' => 1, 'stages' => 3, 'items' => 5, 'dependencies' => 3])
+            ->and(onlyAuditEntry(AuditEvent::TransformationPlanPublished)->metadata)->toEqual(['version' => 1, 'previous_version' => null, 'stages' => 3, 'items' => 5, 'warnings' => []])
+            ->and(onlyAuditEntry(AuditEvent::TransformationPlanDraftStarted)->metadata)->toEqual(['version' => 2, 'based_on_version' => 1])
+            ->and(onlyAuditEntry(AuditEvent::TransformationPlanDraftDiscarded)->metadata)->toEqual(['version' => 2])
+            ->and(onlyAuditEntry(AuditEvent::TransformationPlanItemStatusChanged)->metadata)->toEqual([
+                'item_id' => planItem($plan, $fixture['services']['a'])->id,
+                'service' => $fixture['services']['a'],
+                'from' => 'not_started',
+                'to' => 'on_hold',
+                'reason' => 'بانتظار الميزانية',
+            ])
+            ->and(onlyAuditEntry(AuditEvent::TransformationPlanStatusChanged)->metadata)->toEqual(['from' => 'published', 'to' => 'closed', 'reason' => 'اكتملت المراجعة'])
+            ->and(AuditLog::query()->get()->toJson(JSON_UNESCAPED_UNICODE))->not->toContain('ملاحظة داخلية')->not->toContain('جهّزوا بيانات الإنتاج');
+    });
+
+    it('records a change of listing packages with counts and statuses, never a price', function () {
+        $this->seed(ReferenceDataSeeder::class);
+        $provider = ServiceProvider::factory()->approved()->offering('erp_business_applications.01')->create();
+        $member = User::factory()->providerMember($provider)->create();
+        $erp = CatalogService::query()->where('code', 'erp_business_applications.01')->sole();
+        Sanctum::actingAs($member);
+
+        $this->putJson(route('api.v1.service-providers.services.packages.update', [$provider, $erp]), [
+            'packages' => [['name_ar' => 'أساسية', 'monthly_price' => '1234.56', 'users_count' => 5]],
+        ])->assertOk();
+
+        $entry = onlyAuditEntry(AuditEvent::ServiceListingPackagesUpdated);
+        expect($entry->subject_type)->toBe('service_provider')
+            ->and($entry->subject_id)->toBe($provider->id)
+            ->and($entry->actor_user_id)->toBe($member->id)
+            ->and($entry->metadata)->toEqual(['service' => 'erp_business_applications.01', 'packages' => ['from' => 0, 'to' => 1], 'status' => ['from' => 'approved', 'to' => 'pending']])
+            ->and(json_encode($entry->metadata))->not->toContain('1234');
+    });
+
+    it('records a readiness level opened by completing the plan, with the levels and the plan only', function () {
+        $fixture = planFixture();
+        $plan = publishedPlan($fixture);
+        $admin = $fixture['admin'];
+
+        foreach (['a', 'b', 'c', 'd', 'e'] as $key) {
+            planItem($plan, $fixture['services'][$key])->moveTo(PlanItemExecutionStatus::InProgress, $admin);
+        }
+        foreach (['a', 'b', 'c', 'd'] as $key) {
+            planItem($plan, $fixture['services'][$key])->moveTo(PlanItemExecutionStatus::Completed, $admin);
+        }
+        Sanctum::actingAs($admin);
+        $this->postJson(route('api.v1.transformation-plans.items.complete', [$plan, planItem($plan, $fixture['services']['e'])]))->assertOk();
+
+        $entry = onlyAuditEntry(AuditEvent::ReadinessLevelUnlocked);
+        expect($entry->subject_type)->toBe('factory')
+            ->and($entry->subject_id)->toBe($fixture['factory']->id)
+            ->and($entry->actor_user_id)->toBe($admin->id)
+            ->and($entry->metadata)->toEqual(['from' => 'basic', 'to' => 'advanced', 'transformation_plan_id' => $plan->id, 'completed_items' => 5]);
+    });
+
+    it('records the deletion of a plan that was never published, and nothing for a refused publication', function () {
+        $fixture = planFixture();
+        Sanctum::actingAs($fixture['admin']);
+        $planId = $this->postJson(route('api.v1.factories.transformation-plans.store', $fixture['factory']), ['title' => 'خطة'])->json('data.id');
+
+        $this->postJson(route('api.v1.transformation-plans.publish', $planId))->assertUnprocessable();
+        $this->deleteJson(route('api.v1.transformation-plans.destroy', $planId))->assertNoContent();
+
+        expect(AuditLog::query()->where('event', AuditEvent::TransformationPlanPublished)->count())->toBe(0)
+            ->and(onlyAuditEntry(AuditEvent::TransformationPlanDeleted)->metadata)->toEqual(['factory_id' => $fixture['factory']->id]);
     });
 });

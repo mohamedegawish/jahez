@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { ArrowRight, CheckCircle2, MessageSquare, Plus } from 'lucide-react';
 import { api } from '../../api';
 import type { ServiceRequest } from '../../api';
@@ -15,6 +15,7 @@ import { CardSkeleton } from '../../components/ui/LoadingState';
 import { QueryBoundary } from '../../components/ui/QueryBoundary';
 import { ReasonModal } from '../../components/ui/ReasonModal';
 import { ServiceRequestStatusBadge } from '../../components/ui/StatusBadges';
+import { SelectionSummary } from '../../components/listings/PackageList';
 
 type Dialog = { kind: 'cancel' } | { kind: 'add' } | null;
 
@@ -97,6 +98,11 @@ export const FactoryRequestDetail: React.FC = () => {
                       <div className="mt-2">
                         <LifecycleBadge thread={thread} />
                       </div>
+                      {thread.selection && (
+                        <div className="mt-2">
+                          <SelectionSummary selection={thread.selection} />
+                        </div>
+                      )}
                       <div className="mt-2 text-[10px] text-[#98A2B3]">آخر تغيير {formatDateTime(thread.status_changed_at ?? thread.created_at)}</div>
                     </button>
                   ))}
@@ -139,6 +145,11 @@ const Header: React.FC<{ request: ServiceRequest; onCancel: () => void; onAdd: (
           {request.service?.name_ar}
           {request.service?.category ? ` · ${request.service.category.name_ar}` : ''} · قُدّم في {formatDate(request.created_at)}
         </p>
+        {request.transformation_plan_item_id !== null && (
+          <Link to="/factory/roadmap" className="inline-block mt-1 text-xs font-semibold text-[#5146A5] hover:underline" data-testid="plan-link">
+            مرتبط بخطة التحول الرقمي لمنشأتكم
+          </Link>
+        )}
       </div>
       {request.status === 'open' && (
         <div className="flex items-center gap-2 shrink-0">

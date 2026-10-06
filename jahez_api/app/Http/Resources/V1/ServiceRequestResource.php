@@ -12,7 +12,8 @@ use Illuminate\Http\Resources\Json\JsonResource;
  * provider, so a provider never learns which competitors received the request.
  * `active_provider_count` counts those threads still pending or negotiating: 0 on an
  * open request means every provider has declined or been withdrawn, so the factory can
- * add providers or cancel (PROPOSED, OQ-38).
+ * add providers or cancel (PROPOSED, OQ-38). `transformation_plan_item_id` names the plan
+ * item the request was sent for (ADR-025), or null.
  *
  * @mixin ServiceRequest
  */
@@ -32,6 +33,7 @@ class ServiceRequestResource extends JsonResource
                 'name' => $this->industrialFactory->name,
             ]),
             'service' => new CatalogServiceResource($this->whenLoaded('service')),
+            'transformation_plan_item_id' => $this->transformation_plan_item_id,
             'title' => $this->title,
             'need' => $this->need,
             'requirements' => $this->requirements,

@@ -4,7 +4,6 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Enums\DocumentType;
 use App\Enums\Permission;
-use App\Enums\ServiceListingStatus;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\V1\ListServiceListingsRequest;
 use App\Http\Resources\V1\ServiceListingResource;
@@ -12,9 +11,11 @@ use App\Models\CatalogService;
 use App\Models\Factory;
 use App\Models\OrganizationDocument;
 use App\Models\ServiceCategory;
+use App\Models\ServiceListingPackage;
 use App\Models\ServicePromotion;
 use App\Models\ServiceProvider;
 use App\Models\User;
+use App\Readiness\ServiceEligibility;
 use Illuminate\Container\Attributes\CurrentUser;
 use Illuminate\Database\Query\Builder as QueryBuilder;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -24,10 +25,11 @@ use Illuminate\Support\Facades\DB;
 /**
  * Service listings (ADR-020): one per provider and catalog service it offers.
  *
- * - A factory member sees the listings it is eligible for: listings IMC approved
- *   (ADR-021), of approved providers that target one of its sectors
- *   (ServiceProvider::eligibleFor()). `filter[recommended]` narrows them to its
- *   readiness roadmap's services and never widens eligibility.
+ * - A factory member sees the listings it is eligible for (ServiceEligibility,
+ *   ADR-025): listings IMC approved (ADR-021), of approved providers that target one of
+ *   its sectors, for services IMC made available to its readiness level; none before
+ *   its first assessment. `filter[recommended]` narrows them to its readiness roadmap's
+ *   services and never widens eligibility.
  * - A provider member sees its own listings, with their review status.
  * - IMC administrators see every listing, with its review status
  *   (`filter[listing_status]`, `sort=newest` for the review queue).
@@ -38,6 +40,8 @@ use Illuminate\Support\Facades\DB;
  */
 class ServiceListingController extends Controller
 {
+    public function __construct(private readonly ServiceEligibility $eligibility) {}
+
     public function index(ListServiceListingsRequest $request, #[CurrentUser] User $user): AnonymousResourceCollection
     {
         $factory = $user->factory_id !== null ? Factory::query()->findOrFail($user->factory_id) : null;
@@ -55,9 +59,7 @@ class ServiceListingController extends Controller
                 ->on('promo.service_provider_id', '=', 'l.service_provider_id')
                 ->on('promo.catalog_service_id', '=', 'l.catalog_service_id'))
             ->select(['l.service_provider_id', 'l.catalog_service_id', 'l.status', 'l.status_reason', 'l.status_changed_at', 'l.submitted_at', 'promo.promotion_priority'])
-            ->when($factory, fn (QueryBuilder $query, Factory $factory) => $query
-                ->where('l.status', ServiceListingStatus::Approved->value)
-                ->whereIn('l.service_provider_id', ServiceProvider::query()->eligibleFor($factory)->select('id')->toBase()))
+            ->when($factory, fn (QueryBuilder $query, Factory $factory) => $this->eligibility->constrainListings($query, $factory))
             ->when($user->service_provider_id !== null, fn (QueryBuilder $query) => $query->where('l.service_provider_id', $user->service_provider_id))
             ->when($factory === null ? $request->input('filter.listing_status') : null, fn (QueryBuilder $query, string $status) => $query->where('l.status', $status))
             ->when($factory === null && $user->service_provider_id === null && $request->input('filter.approval_status'), fn (QueryBuilder $query) => $query->where('p.approval_status', $request->input('filter.approval_status')))
@@ -105,6 +107,12 @@ class ServiceListingController extends Controller
         $recommended = $factory !== null
             ? $factory->recommendedCatalogServices()->pluck('catalog_services.id')->all()
             : [];
+        $packages = ServiceListingPackage::query()
+            ->whereIn('service_provider_id', $providers->keys()->all())
+            ->whereIn('catalog_service_id', $services->keys()->all())
+            ->orderBy('position')
+            ->get()
+            ->groupBy(fn (ServiceListingPackage $package): string => "{$package->service_provider_id}-{$package->catalog_service_id}");
 
         $page->setCollection($rows->map(fn (object $row): array => [
             'provider' => $providers->get($row->service_provider_id),
@@ -117,6 +125,7 @@ class ServiceListingController extends Controller
             ],
             'promotion' => $promotions->get("{$row->service_provider_id}-{$row->catalog_service_id}"),
             'logo_document_id' => $logos->get($row->service_provider_id),
+            'packages' => $packages->get("{$row->service_provider_id}-{$row->catalog_service_id}", collect())->values()->all(),
             'recommended' => $factory !== null ? in_array($row->catalog_service_id, $recommended, true) : null,
             'viewer' => match (true) {
                 $factory !== null => 'factory',
@@ -140,16 +149,13 @@ class ServiceListingController extends Controller
             return ['viewer' => $user->service_provider_id !== null ? 'provider' : ($user->hasPermission(Permission::PromotionsManage) ? 'imc' : 'other')];
         }
 
-        $assessment = $factory->currentReadinessAssessment()->with('category')->first();
-
         return [
             'viewer' => 'factory',
+            // Why the list may be empty: no assessment means no service is available (ADR-025).
+            'eligibility_status' => $this->eligibility->statusOf($factory),
             'has_sectors' => $factory->sectors()->exists(),
-            'readiness' => $assessment === null ? null : [
-                'category' => $assessment->category === null ? null : ['code' => $assessment->category->code, 'name_ar' => $assessment->category->name_ar],
-                'total_score' => $assessment->total_score,
-                'completed_at' => $assessment->completed_at->toIso8601ZuluString(),
-            ],
+            // The factory's level, never its score (ADR-026).
+            'readiness' => $this->eligibility->readinessFor($factory, false),
         ];
     }
 }

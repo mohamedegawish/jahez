@@ -3,6 +3,7 @@
 namespace App\Http\Resources\V1;
 
 use App\Models\ProviderRequest;
+use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 use Illuminate\Support\Carbon;
@@ -42,6 +43,10 @@ class ProviderRequestResource extends JsonResource
             'status_reason' => $this->status_reason,
             'status_changed_at' => $this->status_changed_at?->toIso8601ZuluString(),
             'agreed_offer_id' => $this->agreed_offer_id,
+            // The package, period and users the factory chose from the provider's listing
+            // in its cart (ADR-027), as listed then. The two parties only, like the
+            // negotiation itself (OQ-39).
+            ...($this->isPartyToThread($request) ? ['selection' => $this->selection] : []),
             'agreement_id' => $this->whenLoaded('agreement', fn (): ?int => $this->agreement?->id),
             'agreement' => $this->whenLoaded('agreement', fn (): ?array => $this->agreement === null ? null : [
                 'id' => $this->agreement->id,
@@ -63,5 +68,16 @@ class ProviderRequestResource extends JsonResource
             'service_request' => new ServiceRequestResource($this->whenLoaded('serviceRequest')),
             'created_at' => $this->created_at?->toIso8601ZuluString(),
         ];
+    }
+
+    /**
+     * Whether the reader is one of the thread's two parties: a member of the requesting
+     * factory (the policies only ever show a factory its own threads) or of this provider.
+     */
+    private function isPartyToThread(Request $request): bool
+    {
+        $user = $request->user();
+
+        return $user instanceof User && ($user->factory_id !== null || $user->service_provider_id === $this->service_provider_id);
     }
 }

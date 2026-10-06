@@ -106,6 +106,8 @@ const ProfileForm: React.FC<{ factory: Factory; saved: boolean; onSaving: () => 
   const errors = (field: string) => fieldMessages(save.error, field);
   const hasFieldErrors = ['name', 'sectors', ...PROFILE_KEYS].some((field) => errors(field).length > 0);
   const readiness = factory.current_readiness;
+  // ADR-026: the level the factory works at, never a score.
+  const level = factory.readiness_level ?? null;
   const disabled = save.pending;
   // A recorded legal value changes only through a reviewed change request (ADR-020).
   const recorded = (key: 'legal_name' | 'commercial_registration_number' | 'tax_registration_number') => (factory[key] ?? '') !== '';
@@ -190,11 +192,14 @@ const ProfileForm: React.FC<{ factory: Factory; saved: boolean; onSaving: () => 
             requestReview={(note) => api.factories.requestReview(factory.id, note)}
             onChanged={onChanged}
           />
-          <Card title="فئة الجاهزية الرقمية" accent="purple">
+          <Card title="مستوى الجاهزية الرقمية" accent="purple">
             <div className="p-4 rounded-xl bg-gradient-to-br from-[#EEEAFE] to-[#DFF3FF] border border-[#DDD5FD] text-center">
-              <span className="text-xs font-bold text-[#5146A5] block">نتيجة آخر تقييم</span>
-              <div className="text-4xl font-extrabold text-[#5146A5] my-2">{readiness ? readiness.total_score : '—'}</div>
-              <ReadinessBadge category={readiness?.category} />
+              <span className="text-xs font-bold text-[#5146A5] block">مستوى منشأتكم الحالي</span>
+              <div className="text-2xl font-extrabold text-[#5146A5] my-2">{level?.name_ar ?? '—'}</div>
+              <ReadinessBadge category={level} />
+              {level?.unlocked_by === 'plan_completion' && (
+                <p className="text-[11px] text-[#667085] mt-2">فُتح بإتمام خدمات المستوى السابق في خطة التحول الرقمي.</p>
+              )}
             </div>
 
             <div className="mt-4 pt-3 border-t border-[#E6EAF0] text-xs space-y-2">

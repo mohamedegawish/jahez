@@ -36,6 +36,12 @@ it('keeps the text an answer was given with when the version text is corrected l
 
     $this->getJson(route('api.v1.factories.readiness-assessments.show', [$factory, $assessmentId]))
         ->assertOk()
+        ->assertJsonPath('data.answers.0.question_text_ar', $originalQuestion)
+        ->assertJsonPath('data.answers.0.choice_label_ar', 'ب');
+
+    Sanctum::actingAs(User::factory()->imcAdmin()->create());
+    $this->getJson(route('api.v1.factories.readiness-assessments.show', [$factory, $assessmentId]))
+        ->assertOk()
         ->assertJsonPath('data.total_score', 20)
         ->assertJsonPath('data.category.code', 'basic')
         ->assertJsonPath('data.answers.0.question_text_ar', $originalQuestion)

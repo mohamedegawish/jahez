@@ -25,6 +25,7 @@ use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
  * @property string|null $status_reason
  * @property Carbon|null $status_changed_at
  * @property int|null $agreed_offer_id
+ * @property array{package: array{id: int, name_ar: string, monthly_price: string|null, annual_price: string|null, users_count: int|null}|null, billing_period: string|null, users_count: int|null}|null $selection What the factory chose from the provider's listing when it sent the request from its cart (ADR-027), as listed then
  */
 class ProviderRequest extends Model
 {
@@ -44,6 +45,7 @@ class ProviderRequest extends Model
         'status_reason' => null,
         'status_changed_at' => null,
         'agreed_offer_id' => null,
+        'selection' => null,
     ];
 
     /**
@@ -59,6 +61,7 @@ class ProviderRequest extends Model
             'agreed_offer_id' => 'integer',
             'status' => ProviderRequestStatus::class,
             'status_changed_at' => 'datetime',
+            'selection' => 'array',
         ];
     }
 

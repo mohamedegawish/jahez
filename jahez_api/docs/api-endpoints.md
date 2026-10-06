@@ -104,10 +104,12 @@ After IMC approval a member cannot change `legal_name`, `commercial_registration
 
 Legacy classification: `{id, factory_id, classification_method: "manual", score: null, maturity_tier: {code, name_ar, name_en, readiness_band_ar, approved_path_ar, pathway_level: {...}}, justification, assessed_on, recorded_by: {id, name}, created_at}`.
 
-Factory resource: `{id, name, size, sectors: [{code, name_ar, name_en}], current_readiness: {assessment_id, questionnaire_version, total_score, category: {code, name_en, name_ar}, completed_at} | null, created_at, updated_at}`.
+Factory resource: `{id, name, size, sectors: [{code, name_ar, name_en}], current_readiness: {assessment_id, questionnaire_version, total_score (IMC only), category: {code, name_en, name_ar}, completed_at} | null, readiness_level: {code, name_ar, name_en, unlocked_by: "assessment"|"plan_completion", unlocked_at} | null, created_at, updated_at}`.
 - **Sector codes:** `food`, `chemical`, `engineering_metal`, `medical_pharmaceutical`.
 - **`size`:** the declared company size, or null. The default list is `small`, `medium`, `large`; the list is configurable and the size is never derived (OQ-04).
-- **`current_readiness`:** the latest completed readiness assessment, or null before the first. It replaced `current_classification` on 2026-10-03; a legacy manual classification never sets it.
+- **`current_readiness`:** the latest completed readiness assessment, or null before the first. It replaced `current_classification` on 2026-10-03; a legacy manual classification never sets it. Its `total_score` goes to IMC administrators only (ADR-026).
+- **`readiness_level`:** the level the factory works at ([ADR-026](decisions/ADR-026-cumulative-levels-and-progression.md)): the highest of the assessment's category and the levels opened by completing the plan's services of the level below (`unlocked_by: "plan_completion"`, with `unlocked_at`). Null before the first assessment. Also on the IMC list cards.
+- **Readiness scores (ADR-026):** the total, the score ranges, the pillar scores and the points of answers and choices are returned only to holders of `assessments.view_any`. A factory member gets the category, the level and its answers' texts, on every readiness endpoint (assessments, questionnaire, eligibility, listings meta).
 
 ## Service providers
 
@@ -137,7 +139,7 @@ The source document's reference data, for any signed-in account. Not paginated (
 | `GET /reference/maturity-tiers` | 200 `data[]`: `{code, name_ar, name_en, readiness_band_ar, operational_state_ar, approved_path_ar, expected_impact_ar, pathway_level: {code, name_ar, pathway: {code, name_ar}}}`. No score range: the source has none (OQ-06). |
 | `GET /reference/pathways` | 200 `data[]`: `{code, name_ar, name_en, target_group_ar, levels: [{code, name_ar, subtitle_ar, name_en, target_group_ar, scope_items: [{group_ar, group_en, text_ar}], provider_requirements: [text]}]}` (DOC §3; whether the requirements are hard gates is open, OQ-14) |
 | `GET /reference/evaluation-criteria` | 200 `data[]`: `{version, code, name_ar, name_en, sub_elements_ar, weight_percent, verification_ar}` of the current matrix (DOC §6: weights 30/25/20/15/10) |
-| `GET /readiness-questionnaire` | 200 `data`: the current readiness questionnaire (RDA, [ADR-018](decisions/ADR-018-digital-readiness-assessment.md)): `{version, title_ar, title_en, min_score, max_score, pillars: [{code, name_ar, name_en, questions: [{id, code, number, text_ar, choices: [{id, code, label_ar, text_ar, points}]}]}], categories: [{code, name_en, name_ar, description_ar, min_score, max_score, roadmap: {focus_ar, steps_ar, recommendations[]}}]}`. 404 if none is seeded. |
+| `GET /readiness-questionnaire` | 200 `data`: the current readiness questionnaire (RDA, [ADR-018](decisions/ADR-018-digital-readiness-assessment.md)): `{version, title_ar, title_en, min_score, max_score, pillars: [{code, name_ar, name_en, questions: [{id, code, number, text_ar, choices: [{id, code, label_ar, text_ar, points}]}]}], categories: [{code, name_en, name_ar, description_ar, min_score, max_score, roadmap: {focus_ar, steps_ar, recommendations[]}}]}`. `min_score`, `max_score` and `points` go to IMC administrators only (ADR-026). 404 if none is seeded. |
 
 ## Catalog
 
@@ -324,6 +326,11 @@ Each answer of a stored assessment carries `question_text_ar`, `choice_label_ar`
 | `DELETE /announcements/{id}` | IMC | 204 for a draft; 409 while published |
 | `GET\|POST\|DELETE /announcements/{id}/cover` | IMC | multipart `file` (jpg, png, webp, logo size limit); replaces the previous file |
 | `POST /service-providers/{id}/services/{catalogService}/resubmit` | the provider's members | optional `note`; `rejected → pending`; 409 for any other status; IMC 403, others 404 |
+| `PUT /service-providers/{id}/services/{catalogService}/packages` | the provider's members (ADR-027) | `{packages: [{name_ar, monthly_price?, annual_price?, users_count?}]}` (0–10, names distinct, at least one price each, prices `decimal:0,2` EGP); replaces the list; `approved\|rejected → pending`, pending stays; the same list again changes nothing; 409 when suspended; IMC 403, others 404; returns the provider with `service_listings[].packages` |
+| `GET /cart` | factory members (own cart) | `{items: [{id, service, provider, package, billing_period, users_count, price, packages[], available, unavailable_reason: service_not_available\|provider_not_eligible\|null, added_at}], summary: {items_count, services_count, available_items_count, currency, estimated_monthly_total, estimated_annual_total}}`; totals are estimates; others 403 |
+| `POST /cart/items` | factory members | `{service, provider_id, package_id?, billing_period?: monthly\|annual, users_count?}`; 201 added, 200 when the listing was already in the cart (choice replaced); 422 for an ineligible provider, another listing's package, a period without a package or without a price |
+| `PATCH /cart/items/{id}`, `DELETE /cart/items/{id}`, `DELETE /cart` | the cart's owner | change the choice (200 with the cart) / remove (204) / empty (204); another account's item 404 |
+| `POST /cart/checkout` | factory members | `{requests: [{service, title, need, requirements?}]}` (services distinct, each in the cart); 201 with one service request per service, threads carrying `selection`; all or nothing; 422 when a provider in the cart is no longer eligible or the service is not in the cart, 409 when the factory may not send requests |
 
 ## Financial and contract policies (ADR-023)
 
@@ -346,3 +353,27 @@ All need `financial_policies.view` (IMC administrators); members get 403 on list
 | `POST /financial-policy-versions/{id}/preview` | view | `amount` | 200 the calculation under this version alone (tax, revenue share), or the due date, first number, clause count | 401, 404, 422 |
 | `GET /financial-policies/resolve` | view | `kind`, `catalog_service` (id), `sectors[]` (codes), `service_provider` (id), `date` | 200 `{kind, date, version | null, reason_ar}` | 401, 403, **409** (two sector policies apply, OQ-47), 422 |
 | `POST /financial-policies/preview` | view | `amount` and the same context | 200 `{calculation, due_date, policy_versions, missing_ar[]}`; nothing stored | 401, 403, **409** (no tax policy applies), 422 |
+
+## Readiness eligibility and transformation plans (ADR-025)
+
+A factory member sees and requests only the services IMC made available to its readiness level: the catalog (others 404), listings (`meta.eligibility_status`: `eligible` or `no_assessment`), the directory (list, `filter[service]`, profile services, logo), request creation and adding providers (`errors.service`: "This service is not available to your factory's digital readiness level."). IMC and providers keep the whole catalog.
+
+| Method and path | Who | Notes |
+| --- | --- | --- |
+| `GET /readiness-levels` | IMC (`readiness_services.manage` or `transformation_plans.view_any`) | the four levels (`code`, ranges from the current questionnaire), each with `services[]` (`service`, `is_active`, `approved_provider_count`, `recommended`) and `recommended_service_ids`; `summary`: `unassigned_services`, `multi_level_service_ids`, `without_provider_service_ids` |
+| `PUT /readiness-levels/{level}/services/{catalogService}` | IMC (`readiness_services.manage`) | `{is_active?: bool}` (default true); 201 when created, 200 otherwise; a repeat changes and audits nothing; `level` ∈ `b4_automation`, `basic`, `advanced`, `smart` (else 404) |
+| `DELETE /readiness-levels/{level}/services/{catalogService}` | IMC (`readiness_services.manage`) | 204; 404 when absent; the catalog service is untouched |
+| `GET /factories/{id}/service-eligibility` | own members, IMC (`factories.view_any`) | `status`, `has_sectors`, `may_send_requests`, `readiness` (`assessment_id`, `level` and `name_ar` of the level the factory works at, `unlocked_by`, `unlocked_at`, `assessed_level`, `assessed_name_ar`, `total_score` for IMC only, `completed_at`), `services[]` (the services of the level and every level below it, ADR-026) with `eligible_providers_count` and `recommended`; others 404 |
+| `GET /factories/{id}/service-eligibility/{catalogService}/providers` | own members, IMC | eligible providers (directory profile shape); a service above the factory's level is 404 |
+| `GET /transformation-plans?filter[status\|factory]=&search=&sort=newest\|recently_changed` | IMC (all); factory members (own, published at least once) | summary with `factory`, `status`, `published_version`, `progress`; IMC also `draft_version`, `readiness_basis`, `status_reason`; providers 403 |
+| `POST /factories/{id}/transformation-plans` | IMC (`transformation_plans.manage`) | `{title, summary_ar?}`; 201 with an empty version-1 draft; 409 without an assessment or with another open plan; factory members 403, others 404 |
+| `GET /transformation-plans/{id}` | IMC; own factory members once published | detailed: `published` (stages → items with `state`, `depends_on`, `waiting_for`, `parallel_with`, `request`, `can_request`); IMC also `draft`, `review` (problems with `blocking`), `current_readiness`, `current_level` (the factory's level, including one opened through the plan, ADR-026), `readiness_changed`, notes, `allowed_actions`, `attention` |
+| `DELETE /transformation-plans/{id}` | IMC | 204 for a plan never published; 409 otherwise |
+| `POST /transformation-plans/{id}/suspend\|resume\|close` | IMC | `{reason?}`; 409 for a transition the workflow refuses |
+| `GET /transformation-plans/{id}/versions`, `GET .../versions/{versionId}` | IMC | history with actors, change notes, counts; factory members 403 |
+| `POST /transformation-plans/{id}/draft` | IMC | 201: a new draft copied from the published version; 409 when one exists or the plan is closed |
+| `PUT /transformation-plans/{id}/draft` | IMC | `{based_on_revision, title, summary_ar?, change_note?, stages: [{name_ar, objective_ar?, description_ar?, factory_instructions_ar?, internal_notes?, planned_start_date?, planned_end_date?, items: [{service, service_provider_id?, instructions_ar?, internal_notes?, planned_*_date?, depends_on?: [service codes]}]}]}` (≤ 20 stages, ≤ 30 items each); 409 stale revision; 422 unknown or duplicated service, dependency outside the plan, self-dependency, cycle, end before start |
+| `DELETE /transformation-plans/{id}/draft` | IMC | discards the draft of a published plan (409 for a never-published plan: delete it instead) |
+| `POST /transformation-plans/{id}/publish` | IMC | `{change_note?}` (required from version 2); 422 `errors.draft` while a blocking review problem remains |
+| `POST /transformation-plans/{id}/items/{item}/start\|complete\|hold\|resume\|cancel\|reopen` | IMC (`transformation_plans.manage`) | `{reason?}`; `start` 409 until prerequisites are completed and the agreement is approved; an item of another plan 404 |
+| `POST /service-requests` | factory members | optional `transformation_plan_item_id`: 422 for an item outside the factory's published plan, another service, or a provider other than the assigned one; 409 when the plan is suspended or closed, the item closed, or another live request exists |

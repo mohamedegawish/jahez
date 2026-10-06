@@ -3,6 +3,7 @@
 use App\Http\Requests\Api\V1\StoreReadinessAssessmentRequest;
 use App\Models\AuditLog;
 use App\Models\Factory;
+use App\Models\ReadinessAssessment;
 use App\Models\ReadinessAssessmentAnswer;
 use App\Models\ReadinessCategory;
 use App\Models\ReadinessChoice;
@@ -30,6 +31,26 @@ function signedInFactoryMember(): array
     Sanctum::actingAs($member);
 
     return [$factory, $member];
+}
+
+/**
+ * The total the server stored for the factory's latest assessment. A factory member's
+ * response carries the category, never the score (ADR-026).
+ */
+function storedReadinessTotal(Factory $factory): ?int
+{
+    return ReadinessAssessment::query()->where('factory_id', $factory->id)->latest('id')->value('total_score');
+}
+
+/**
+ * Sign in as an IMC administrator, who sees readiness scores.
+ */
+function signInAsImc(): User
+{
+    $admin = User::factory()->imcAdmin()->create();
+    Sanctum::actingAs($admin);
+
+    return $admin;
 }
 
 /**
@@ -70,9 +91,6 @@ describe('scoring and classification', function () {
         $response->assertCreated()
             ->assertJsonPath('data.factory_id', $factory->id)
             ->assertJsonPath('data.questionnaire_version', 1)
-            ->assertJsonPath('data.total_score', 10)
-            ->assertJsonPath('data.min_score', 10)
-            ->assertJsonPath('data.max_score', 40)
             ->assertJsonPath('data.category.code', 'b4_automation')
             ->assertJsonPath('data.category.name_ar', 'ما قبل الأتمتة')
             ->assertJsonPath('data.submitted_by', ['id' => $member->id, 'name' => 'Factory Member'])
@@ -87,18 +105,24 @@ describe('scoring and classification', function () {
 
         $this->postJson(route('api.v1.factories.readiness-assessments.store', $factory), readinessPayload('d'))
             ->assertCreated()
-            ->assertJsonPath('data.total_score', 40)
             ->assertJsonPath('data.category.code', 'smart');
+        expect(storedReadinessTotal($factory))->toBe(40);
     });
 
     it('sums mixed answers and breaks the score down by pillar', function () {
         [$factory] = signedInFactoryMember();
 
-        $response = $this->postJson(route('api.v1.factories.readiness-assessments.store', $factory), readinessPayload(['a', 'b', 'c', 'd', 'a', 'b', 'c', 'd', 'a', 'b']));
+        $id = $this->postJson(route('api.v1.factories.readiness-assessments.store', $factory), readinessPayload(['a', 'b', 'c', 'd', 'a', 'b', 'c', 'd', 'a', 'b']))
+            ->assertCreated()
+            ->assertJsonPath('data.category.code', 'basic')
+            ->json('data.id');
 
-        $response->assertCreated()
+        signInAsImc();
+        $response = $this->getJson(route('api.v1.factories.readiness-assessments.show', [$factory, $id]))
+            ->assertOk()
             ->assertJsonPath('data.total_score', 23)
-            ->assertJsonPath('data.category.code', 'basic');
+            ->assertJsonPath('data.min_score', 10)
+            ->assertJsonPath('data.max_score', 40);
         expect(array_map(fn (array $pillar): array => [$pillar['code'], $pillar['score'], $pillar['max_score']], $response->json('data.pillars')))->toBe([
             ['strategy_leadership', 3, 8],
             ['processes_operations', 7, 8],
@@ -114,8 +138,8 @@ describe('scoring and classification', function () {
 
         $this->postJson(route('api.v1.factories.readiness-assessments.store', $factory), readinessPayload(readinessChoicesForTotal($total)))
             ->assertCreated()
-            ->assertJsonPath('data.total_score', $total)
             ->assertJsonPath('data.category.code', $category);
+        expect(storedReadinessTotal($factory))->toBe($total);
     })->with([
         [17, 'b4_automation'],
         [18, 'basic'],
@@ -132,9 +156,9 @@ describe('scoring and classification', function () {
 
         $this->postJson(route('api.v1.factories.readiness-assessments.store', $factory), $payload)
             ->assertCreated()
-            ->assertJsonPath('data.total_score', 10)
             ->assertJsonPath('data.category.code', 'b4_automation');
-        expect(ReadinessAssessmentAnswer::query()->sum('points'))->toEqual(10);
+        expect(storedReadinessTotal($factory))->toBe(10)
+            ->and(ReadinessAssessmentAnswer::query()->sum('points'))->toEqual(10);
     });
 
     it('returns the roadmap of the category with the catalog services it recommends', function () {
@@ -259,7 +283,8 @@ describe('duplicate submissions', function () {
         $repeat = $this->postJson(route('api.v1.factories.readiness-assessments.store', $factory), readinessPayload('c'), $headers)->assertOk();
 
         expect($repeat->json('data.id'))->toBe($first->json('data.id'))
-            ->and($repeat->json('data.total_score'))->toBe(30);
+            ->and($repeat->json('data.category.code'))->toBe('advanced')
+            ->and(storedReadinessTotal($factory))->toBe(30);
         $this->assertDatabaseCount('readiness_assessments', 1);
         $this->assertDatabaseCount('readiness_assessment_answers', 10);
         expect(AuditLog::query()->where('event', 'factory.readiness_assessment_completed')->count())->toBe(1);
@@ -298,6 +323,34 @@ describe('access', function () {
         $this->getJson(route('api.v1.factories.readiness-assessments.show', [$factory, $assessment]))->assertOk()->assertJsonPath('data.total_score', 30);
         $this->postJson(route('api.v1.factories.readiness-assessments.store', $factory), readinessPayload('a'))->assertForbidden();
         $this->assertDatabaseCount('readiness_assessments', 1);
+    });
+
+    it('shows a factory member its level and answers but never a score, a range or points', function () {
+        [$factory] = signedInFactoryMember();
+        $id = $this->postJson(route('api.v1.factories.readiness-assessments.store', $factory), readinessPayload(['a', 'b', 'c', 'd', 'a', 'b', 'c', 'd', 'a', 'b']))->assertCreated()->json('data.id');
+
+        foreach ([
+            $this->postJson(route('api.v1.factories.readiness-assessments.store', $factory), readinessPayload('b'))->assertCreated(),
+            $this->getJson(route('api.v1.factories.readiness-assessments.show', [$factory, $id]))->assertOk(),
+        ] as $response) {
+            $response->assertJsonPath('data.category.code', 'basic')
+                ->assertJsonMissingPath('data.total_score')
+                ->assertJsonMissingPath('data.min_score')
+                ->assertJsonMissingPath('data.max_score')
+                ->assertJsonMissingPath('data.pillars')
+                ->assertJsonMissingPath('data.category.min_score')
+                ->assertJsonMissingPath('data.category.max_score')
+                ->assertJsonCount(10, 'data.answers');
+            expect(collect($response->json('data.answers'))->every(fn (array $answer): bool => ! array_key_exists('points', $answer) && $answer['choice_label_ar'] !== null))->toBeTrue();
+        }
+
+        $this->getJson(route('api.v1.factories.readiness-assessments.index', $factory))
+            ->assertOk()
+            ->assertJsonMissingPath('data.0.total_score')
+            ->assertJsonMissingPath('data.0.category.min_score');
+        $this->getJson(route('api.v1.factories.show', $factory))
+            ->assertJsonPath('data.current_readiness.category.code', 'basic')
+            ->assertJsonMissingPath('data.current_readiness.total_score');
     });
 
     it('returns 404 to anyone outside the factory and IMC, before validating the payload', function (Closure $makeOutsider) {
@@ -347,12 +400,14 @@ describe('history', function () {
             ->and($history->json('data.*.category.code'))->toBe(['advanced', 'b4_automation']);
         $this->getJson(route('api.v1.factories.show', $factory))
             ->assertJsonPath('data.current_readiness.assessment_id', $second)
-            ->assertJsonPath('data.current_readiness.total_score', 30)
             ->assertJsonPath('data.current_readiness.category.code', 'advanced');
         $this->getJson(route('api.v1.factories.readiness-assessments.show', [$factory, $first]))
             ->assertOk()
-            ->assertJsonPath('data.total_score', 10)
             ->assertJsonPath('data.category.code', 'b4_automation');
+
+        signInAsImc();
+        $this->getJson(route('api.v1.factories.show', $factory))->assertJsonPath('data.current_readiness.total_score', 30);
+        $this->getJson(route('api.v1.factories.readiness-assessments.show', [$factory, $first]))->assertJsonPath('data.total_score', 10);
     });
 
     it('keeps an assessment with the version it answered after a new version becomes current', function () {
@@ -363,6 +418,7 @@ describe('history', function () {
         $second = $this->postJson(route('api.v1.factories.readiness-assessments.store', $factory), readinessPayload('d'))->assertCreated();
 
         $second->assertJsonPath('data.questionnaire_version', 2);
+        signInAsImc();
         $this->getJson(route('api.v1.factories.readiness-assessments.show', [$factory, $first]))
             ->assertJsonPath('data.questionnaire_version', 1)
             ->assertJsonPath('data.total_score', 20)

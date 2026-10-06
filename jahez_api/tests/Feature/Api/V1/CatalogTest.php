@@ -12,7 +12,7 @@ beforeEach(function () {
     $this->seed(ReferenceDataSeeder::class);
 });
 
-it('lists the seven categories in workbook order with their services, to any signed-in account', function (Closure $makeUser) {
+it('lists the seven categories in workbook order with their services, to any signed-in account (a factory member: those of its level)', function (Closure $makeUser) {
     Sanctum::actingAs($makeUser());
 
     $response = $this->getJson(route('api.v1.catalog.categories.index'));
@@ -27,12 +27,12 @@ it('lists the seven categories in workbook order with their services, to any sig
     expect(collect($response->json('data'))->sum(fn (array $category): int => count($category['services'])))->toBe(42);
 })->with([
     'IMC administrator' => [fn () => User::factory()->imcAdmin()->create()],
-    'factory member' => [fn () => User::factory()->factoryMember()->create()],
+    'factory member whose level has every service' => [fn () => User::factory()->factoryMember(everyServiceAvailableTo(Factory::factory()->create()))->create()],
     'provider member' => [fn () => User::factory()->providerMember()->create()],
 ]);
 
 it('shows one category with its services', function () {
-    Sanctum::actingAs(User::factory()->create());
+    Sanctum::actingAs(User::factory()->factoryMember(everyServiceAvailableTo(Factory::factory()->create()))->create());
     $category = ServiceCategory::query()->where('code', 'automation_ot')->firstOrFail();
 
     $this->getJson(route('api.v1.catalog.categories.show', $category))
@@ -42,7 +42,7 @@ it('shows one category with its services', function () {
 });
 
 it('lists services, optionally of one category', function () {
-    Sanctum::actingAs(User::factory()->create());
+    Sanctum::actingAs(User::factory()->factoryMember(everyServiceAvailableTo(Factory::factory()->create()))->create());
 
     $this->getJson(route('api.v1.catalog.services.index'))->assertOk()->assertJsonCount(42, 'data');
     $this->getJson(route('api.v1.catalog.services.index', ['filter' => ['category' => 'cloud_infrastructure']]))
@@ -52,7 +52,7 @@ it('lists services, optionally of one category', function () {
 });
 
 it('lists for a factory member only the services an eligible provider offers', function () {
-    $factory = Factory::factory()->inSectors('food')->create();
+    $factory = everyServiceAvailableTo(Factory::factory()->inSectors('food')->create());
     ServiceProvider::factory()->approved()->inSectors('food')->offering('automation_ot.03')->create();
     ServiceProvider::factory()->inSectors('food')->offering('ai_data_analytics.01')->create();
     ServiceProvider::factory()->approved()->inSectors('chemical')->offering('cloud_infrastructure.02')->create();
@@ -81,7 +81,7 @@ it('rejects an unknown category or filter key with 422', function (array $filter
 ]);
 
 it('shows one service with its category', function () {
-    Sanctum::actingAs(User::factory()->create());
+    Sanctum::actingAs(User::factory()->factoryMember(everyServiceAvailableTo(Factory::factory()->create()))->create());
     $service = CatalogService::query()->where('code', 'digital_engineering_smart_manufacturing.01')->firstOrFail();
 
     $this->getJson(route('api.v1.catalog.services.show', $service))
@@ -103,6 +103,7 @@ it('returns 401 without a token', function () {
 it('lists for a factory member the services recommended for its current readiness category', function () {
     $factory = Factory::factory()->inSectors('food')->create();
     storedReadinessAssessment($factory, 'b');
+    everyServiceAvailableTo($factory);
     Sanctum::actingAs(User::factory()->factoryMember($factory)->create());
 
     $response = $this->getJson(route('api.v1.catalog.services.index', ['filter' => ['recommended' => 1]]));

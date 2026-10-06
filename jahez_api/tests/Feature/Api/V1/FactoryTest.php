@@ -71,12 +71,13 @@ describe('index', function () {
 
         expect(array_keys($card))->toEqualCanonicalizing([
             'id', 'name', 'size', 'governorate', 'city', 'sectors', 'logo', 'onboarding',
-            'current_readiness', 'approval', 'profile_completion', 'service_requests_count', 'created_at', 'updated_at',
+            'current_readiness', 'readiness_level', 'approval', 'profile_completion', 'service_requests_count', 'created_at', 'updated_at',
         ])
             ->and($card['profile_completion'])->toBe(['filled' => 9, 'total' => 10, 'missing' => ['logo']])
             ->and($card['service_requests_count'])->toBe(2)
             ->and($card['logo'])->toBeNull()
             ->and($card['current_readiness']['total_score'])->toBe(30)
+            ->and($card['readiness_level'])->toBe(['code' => 'advanced', 'name_ar' => $card['current_readiness']['category']['name_ar'], 'name_en' => 'Advanced', 'unlocked_by' => 'assessment', 'unlocked_at' => null])
             ->and(json_encode($card))->not->toContain('CR-123456')
             ->and(json_encode($card))->not->toContain('contact@example.test')
             ->and(json_encode($card))->not->toContain('12 Industrial Zone');
@@ -311,15 +312,22 @@ describe('current readiness classification', function () {
 
         $response = $this->getJson(route('api.v1.factories.show', $factory));
 
+        // A factory member sees its category and level, never its score (ADR-026).
         $response->assertJsonPath('data.current_readiness', [
             'assessment_id' => $current->id,
             'questionnaire_version' => 1,
-            'total_score' => 20,
             'category' => ['code' => 'basic', 'name_en' => 'Basic', 'name_ar' => 'مبتدئ / رقمنة أساسية'],
             'completed_at' => '2026-10-01T08:00:00Z',
+        ])->assertJsonPath('data.readiness_level', [
+            'code' => 'basic',
+            'name_ar' => 'مبتدئ / رقمنة أساسية',
+            'name_en' => 'Basic',
+            'unlocked_by' => 'assessment',
+            'unlocked_at' => null,
         ]);
         Sanctum::actingAs(User::factory()->imcAdmin()->create());
-        expect($this->getJson(route('api.v1.factories.index'))->json('data.0.current_readiness.assessment_id'))->toBe($current->id);
+        expect($this->getJson(route('api.v1.factories.index'))->json('data.0.current_readiness.assessment_id'))->toBe($current->id)
+            ->and($this->getJson(route('api.v1.factories.show', $factory))->json('data.current_readiness.total_score'))->toBe(20);
     });
 
     it('does not turn a legacy manual classification into a readiness classification', function () {

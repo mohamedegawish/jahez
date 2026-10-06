@@ -53,7 +53,8 @@ class FactorySummaryResource extends FactoryResource
             // Fetched through GET /factories/{id}/documents/{document}, like any document.
             'logo' => $this->whenLoaded('activeDocuments', fn (): ?array => $this->logo()),
             'onboarding' => $this->when($this->relationLoaded('currentReadinessAssessment'), fn (): array => $this->onboarding()),
-            'current_readiness' => $this->whenLoaded('currentReadinessAssessment', fn (): ?array => $this->currentReadiness()),
+            'current_readiness' => $this->whenLoaded('currentReadinessAssessment', fn (): ?array => $this->currentReadiness($request)),
+            'readiness_level' => $this->whenLoaded('currentReadinessAssessment', fn (): ?array => $this->readinessLevel()),
             'approval' => $this->approval(),
             'profile_completion' => $this->when($this->relationLoaded('sectors') && $this->relationLoaded('activeDocuments'), fn (): array => $this->profileCompletion()),
             'service_requests_count' => $this->whenCounted('serviceRequests'),

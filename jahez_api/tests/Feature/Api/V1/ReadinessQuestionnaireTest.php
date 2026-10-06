@@ -11,7 +11,7 @@ beforeEach(function () {
 });
 
 it('returns the current questionnaire with its questions grouped by pillar and four scored choices each', function () {
-    Sanctum::actingAs(User::factory()->factoryMember()->create());
+    Sanctum::actingAs(User::factory()->imcAdmin()->create());
 
     $response = $this->getJson(route('api.v1.readiness-questionnaire.show'));
 
@@ -30,8 +30,26 @@ it('returns the current questionnaire with its questions grouped by pillar and f
         ->toBe([['أ', 1], ['ب', 2], ['ج', 3], ['د', 4]]);
 });
 
-it('returns the categories with their score ranges and the catalog services each roadmap recommends', function () {
+it('gives a factory member the questions and choices without their points or any score range', function () {
     Sanctum::actingAs(User::factory()->factoryMember()->create());
+
+    $response = $this->getJson(route('api.v1.readiness-questionnaire.show'));
+
+    $response->assertOk()
+        ->assertJsonPath('data.version', 1)
+        ->assertJsonMissingPath('data.min_score')
+        ->assertJsonMissingPath('data.max_score')
+        ->assertJsonCount(4, 'data.categories')
+        ->assertJsonPath('data.categories.1.code', 'basic')
+        ->assertJsonMissingPath('data.categories.1.min_score')
+        ->assertJsonMissingPath('data.categories.1.max_score')
+        ->assertJsonPath('data.categories.0.roadmap.recommendations.3.services.0.code', 'erp_business_applications.04');
+    expect(array_map(fn (array $choice): array => array_keys($choice), $response->json('data.pillars.0.questions.0.choices')))
+        ->each->toBe(['id', 'code', 'label_ar', 'text_ar']);
+});
+
+it('returns the categories with their score ranges and the catalog services each roadmap recommends', function () {
+    Sanctum::actingAs(User::factory()->imcAdmin()->create());
 
     $response = $this->getJson(route('api.v1.readiness-questionnaire.show'));
 

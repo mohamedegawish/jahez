@@ -12,15 +12,15 @@ const VARIANT: Record<string, BadgeVariant> = {
 };
 
 interface ReadinessBadgeProps {
-  category: { code: string; name_ar: string } | null | undefined;
+  category: { code: string; name_ar: string | null } | null | undefined;
   size?: 'sm' | 'md';
 }
 
-/** The factory's readiness category as classified by the server, or "not assessed". */
+/** A readiness category or level (ADR-018, ADR-026) as decided by the server, or "not assessed". */
 export const ReadinessBadge: React.FC<ReadinessBadgeProps> = ({ category, size = 'md' }) =>
   category ? (
     <Badge variant={VARIANT[category.code] ?? 'blue'} size={size}>
-      {category.name_ar}
+      {category.name_ar ?? '—'}
     </Badge>
   ) : (
     <Badge variant="neutral" size={size}>

@@ -430,6 +430,22 @@ class MarketplaceNotifications
      * The provider sent a rejected listing back to review: IMC reviewers are told, and
      * the provider's members get the confirmation.
      */
+    /**
+     * The provider changed the packages and prices of a listing (ADR-027), which is back
+     * in IMC's review queue. The text names the provider and the service, never a price.
+     */
+    public static function serviceListingPackagesChanged(ServiceProvider $provider, CatalogService $service): void
+    {
+        PlatformNotifier::imcWith(
+            Permission::ServiceListingsReview,
+            NotificationEvent::ServiceListingPackagesChanged,
+            "service_listing.{$provider->id}.{$service->id}.packages_changed.".now()->getTimestamp(),
+            "حدّث مزود الخدمة «{$provider->name}» باقات وأسعار خدمة «{$service->name_ar}»، وهي بانتظار المراجعة.",
+            '/admin/services?listing_status=pending',
+            ['type' => 'service_provider', 'id' => $provider->id],
+        );
+    }
+
     public static function serviceListingResubmitted(ServiceProvider $provider, CatalogService $service): void
     {
         $key = "service_listing.{$provider->id}.{$service->id}.resubmitted.".now()->getTimestamp();
@@ -481,7 +497,7 @@ class MarketplaceNotifications
             $factoryId,
             NotificationEvent::ReadinessAssessmentCompleted,
             "readiness_assessment.{$assessmentId}.completed",
-            'سُجّل تقييم الجاهزية الرقمية لمنشأتكم وحُسبت فئة الجاهزية. اطّلعوا على النتيجة والخدمات الموصى بها.',
+            'سُجّل تقييم الجاهزية الرقمية لمنشأتكم وحُدّد مستوى الجاهزية. اطّلعوا على مستوى منشأتكم والخدمات الموصى بها.',
             '/factory/assessment',
             ['type' => 'readiness_assessment', 'id' => $assessmentId],
         );

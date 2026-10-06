@@ -12,6 +12,7 @@ import { ProviderFormModal } from '../../components/admin/ProviderFormModal';
 import { ProviderLegalReview } from '../../components/admin/ProviderLegalReview';
 import { EvaluationPanel } from '../../components/admin/ProviderEvaluationPanel';
 import { ReviewHistory } from '../../components/admin/ReviewHistory';
+import { PackageList } from '../../components/listings/PackageList';
 import { ApprovalBadge, ListingStatusBadge } from '../../components/ui/ApprovalBadge';
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
@@ -178,6 +179,9 @@ export const ProviderApprovalDetail: React.FC = () => {
                                 {listing.changed_at ? ` · آخر قرار ${formatDate(listing.changed_at)}` : ''}
                               </div>
                               {listing.reason && <div className="text-[11px] text-[#667085] mt-1" dir="auto">السبب: {listing.reason}</div>}
+                              <div className="mt-2">
+                                <PackageList packages={listing.packages ?? []} />
+                              </div>
                             </div>
                             <div className="flex flex-wrap gap-2 shrink-0">
                               {allowedListingDecisions(listing.status).map((decision) => (

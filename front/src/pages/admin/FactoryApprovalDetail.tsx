@@ -14,6 +14,7 @@ import { AssessmentDetailModal } from '../../components/admin/AssessmentDetailMo
 import { FactoryChangeQueue } from '../../components/admin/FactoryChangeQueue';
 import { FactoryFormModal } from '../../components/admin/FactoryFormModal';
 import { ReviewHistory } from '../../components/admin/ReviewHistory';
+import { FactoryPlanCard } from '../../components/roadmap-admin/FactoryPlanCard';
 import { ApprovalBadge } from '../../components/ui/ApprovalBadge';
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
@@ -218,6 +219,12 @@ export const FactoryApprovalDetail: React.FC = () => {
                         <span className="text-[#98A2B3]">
                           الإصدار {f.current_readiness.questionnaire_version} · {formatDateTime(f.current_readiness.completed_at)}
                         </span>
+                        {f.readiness_level?.unlocked_by === 'plan_completion' && (
+                          <span className="flex items-center gap-2">
+                            المستوى المفتوح: <ReadinessBadge category={f.readiness_level} size="sm" />
+                            <span className="text-[#98A2B3]">بإتمام خدمات خطة التحول · {f.readiness_level.unlocked_at ? formatDateTime(f.readiness_level.unlocked_at) : ''}</span>
+                          </span>
+                        )}
                       </div>
                     ) : (
                       <p className="text-xs text-[#A66F0B] font-semibold mb-4">لم تُكمل المنشأة تقييم الجاهزية الرقمية بعد.</p>
@@ -245,6 +252,8 @@ export const FactoryApprovalDetail: React.FC = () => {
                       )}
                     </QueryBoundary>
                   </Card>
+
+                  <FactoryPlanCard factory={f} />
                 </div>
 
                 <div className="lg:col-span-4 space-y-6">

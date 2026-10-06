@@ -188,8 +188,11 @@ it('publishes a draft, after which factories answer it and earlier results keep 
         ->assertJsonPath('data.questionnaire_version', 2);
     $this->getJson(route('api.v1.factories.readiness-assessments.show', [$factory, $earlier]))
         ->assertJsonPath('data.questionnaire_version', 1)
-        ->assertJsonPath('data.total_score', 20)
+        ->assertJsonMissingPath('data.total_score')
         ->assertJsonPath('data.category.code', 'basic');
+    // The earlier total is unchanged; only IMC sees scores (ADR-026).
+    Sanctum::actingAs(User::factory()->imcAdmin()->create());
+    $this->getJson(route('api.v1.factories.readiness-assessments.show', [$factory, $earlier]))->assertJsonPath('data.total_score', 20);
 
     expect(AuditLog::query()->where('event', AuditEvent::ReadinessQuestionnairePublished)->sole()->metadata)->toEqual(['version' => 2, 'previous_version' => 1]);
 });

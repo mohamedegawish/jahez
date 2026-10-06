@@ -18,6 +18,7 @@ use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
  * @property int $id
  * @property int $factory_id
  * @property int $catalog_service_id
+ * @property int|null $transformation_plan_item_id
  * @property string $title
  * @property string $need
  * @property string|null $requirements
@@ -52,6 +53,7 @@ class ServiceRequest extends Model
         return [
             'factory_id' => 'integer',
             'catalog_service_id' => 'integer',
+            'transformation_plan_item_id' => 'integer',
             'created_by_user_id' => 'integer',
             'status' => ServiceRequestStatus::class,
             'status_changed_at' => 'datetime',
@@ -80,6 +82,16 @@ class ServiceRequest extends Model
     public function createdBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by_user_id');
+    }
+
+    /**
+     * The transformation plan item the request was sent for, if any (ADR-025).
+     *
+     * @return BelongsTo<TransformationPlanItem, $this>
+     */
+    public function planItem(): BelongsTo
+    {
+        return $this->belongsTo(TransformationPlanItem::class, 'transformation_plan_item_id');
     }
 
     /**

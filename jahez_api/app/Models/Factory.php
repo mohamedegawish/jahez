@@ -259,6 +259,17 @@ class Factory extends Model
     }
 
     /**
+     * The readiness levels the factory opened by completing its plan's services of the
+     * level below (ADR-026). Its level is the highest of these and its current assessment.
+     *
+     * @return HasMany<ReadinessLevelUnlock, $this>
+     */
+    public function readinessLevelUnlocks(): HasMany
+    {
+        return $this->hasMany(ReadinessLevelUnlock::class);
+    }
+
+    /**
      * The catalog services the roadmap recommends for the factory's current readiness
      * category; none before its first assessment. A recommendation says which services
      * may be relevant, never which providers are eligible.

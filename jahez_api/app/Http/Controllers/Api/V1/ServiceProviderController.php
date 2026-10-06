@@ -27,7 +27,7 @@ class ServiceProviderController extends Controller
     /**
      * Relations the full profile resource shows.
      */
-    public const PROFILE_RELATIONS = ['sectors', 'services.category', 'activeDocuments', 'openChangeRequest.documents'];
+    public const PROFILE_RELATIONS = ['sectors', 'services.category', 'listingPackages', 'activeDocuments', 'openChangeRequest.documents'];
 
     public function index(ListServiceProvidersRequest $request): AnonymousResourceCollection
     {

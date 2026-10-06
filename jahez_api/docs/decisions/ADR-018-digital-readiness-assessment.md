@@ -40,7 +40,7 @@ The RDA categories are not the concept paper's four maturity tiers:
      - another makes the category belong to the version answered;
      - a unique key allows one answer per question.
    - **Model guard:** the model refuses a total that no category covers, and a category that does not match the total.
-5. **Current classification.** The factory's current classification is its latest assessment, by `completed_at` (set by the server) and then id. `FactoryResource` shows it as `current_readiness`.
+5. **Current classification.** The factory's current classification is its latest assessment, by `completed_at` (set by the server) and then id. `FactoryResource` shows it as `current_readiness`. *(Amended by [ADR-026](ADR-026-cumulative-levels-and-progression.md), 2026-10-06: the level the factory works at is the highest of this classification and the levels opened through its transformation plan, shown as `readiness_level`; the total and every other score go to IMC administrators only.)*
 6. **Manual classification retired.**
    - `POST /factories/{id}/assessments` is removed: it now answers 405, and the `assessments.create` permission is gone.
    - **Legacy history kept:** existing manual classifications stay readable at `GET /factories/{id}/assessments`.
@@ -48,7 +48,7 @@ The RDA categories are not the concept paper's four maturity tiers:
 7. **Categories separate from the DOC maturity tiers** (owner decision).
    - `maturity_tiers` is unchanged, and its `score_min` and `score_max` stay NULL.
    - Whether the two sets correspond is [OQ-41](../open-questions.md#oq-41).
-8. **Recommendations are not eligibility.**
+8. **Recommendations are not eligibility.** *(Superseded in part by [ADR-025](ADR-025-readiness-eligibility-and-transformation-plans.md), 2026-10-05: the readiness level now gates which services a factory may see and request, through the services IMC makes available to each level. Recommendations still never make a service available or a provider eligible.)*
    - **Recommendation lines:** each category's §5 service lines are stored with the source text.
    - **Catalog mapping:** each line maps to the existing catalog services that carry the same text. «إعادة هندسة ورقمنة العمليات.» names two catalog services and maps to both (owner decision). «إدارة التدريب» maps to «إدارة التدريب والثقافة الرقمية.», which is workbook rows 59–60.
    - **Unmapped lines:** lines the catalog does not offer map to nothing ([OQ-42](../open-questions.md#oq-42)), and no catalog service is created for them.

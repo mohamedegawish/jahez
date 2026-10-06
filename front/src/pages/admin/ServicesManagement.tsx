@@ -13,7 +13,9 @@ import { allowedListingDecisions, type ApprovalDecision } from '../../lib/provid
 import { ApprovalDecisionModal } from '../../components/admin/ApprovalDecisionModal';
 import { colorOptions } from '../../components/admin/colorOptions';
 import { ListingDetailModal } from '../../components/admin/ListingDetailModal';
+import { ReadinessLevelServices } from '../../components/admin/ReadinessLevelServices';
 import { CreatePromotionModal } from '../../components/admin/PromotionsPanel';
+import { PackageList } from '../../components/listings/PackageList';
 import { ServiceListingCard } from '../../components/listings/ServiceListingCard';
 import { ListingStatusBadge } from '../../components/ui/ApprovalBadge';
 import { Button } from '../../components/ui/Button';
@@ -34,11 +36,13 @@ const selectClass = 'w-full py-2 px-3 text-xs bg-white border border-[#E6EAF0] r
  * Services in two clearly separate parts (ADR-014, ADR-021):
  * - provider listings: what each provider offers, each with its own IMC decision. Factories see a
  *   listing only when it and its provider are approved; promotions («إعلان») only reorder those.
+ * - the services each readiness level makes available (ADR-025): IMC decides them; factories see and
+ *   request only those of their level.
  * - the ministry catalog: the 7 categories and 42 services from the approved workbook, read-only here.
  */
 export const ServicesManagement: React.FC = () => {
   const list = useListParams(FILTER_KEYS);
-  const tab = list.filters.tab === 'catalog' ? 'catalog' : 'listings';
+  const tab = list.filters.tab === 'catalog' || list.filters.tab === 'levels' ? list.filters.tab : 'listings';
 
   return (
     <div className="space-y-6">
@@ -55,13 +59,20 @@ export const ServicesManagement: React.FC = () => {
       <Tabs
         tabs={[
           { id: 'listings', label: 'خدمات المزودين (تُراجع وتُعتمد)' },
+          { id: 'levels', label: 'إتاحة الخدمات حسب مستوى الجاهزية' },
           { id: 'catalog', label: 'كتالوج الوزارة (مرجعي)' },
         ]}
         activeTab={tab}
         onChange={(id) => list.setFilter('tab', id === 'listings' ? '' : id)}
       />
 
-      {tab === 'listings' ? <ProviderListings list={list} /> : <CatalogCards search={list.search} setSearch={list.setSearch} />}
+      {tab === 'listings' ? (
+        <ProviderListings list={list} />
+      ) : tab === 'levels' ? (
+        <ReadinessLevelServices />
+      ) : (
+        <CatalogCards search={list.search} setSearch={list.setSearch} />
+      )}
     </div>
   );
 };
@@ -176,6 +187,7 @@ const ProviderListings: React.FC<{ list: ReturnType<typeof useListParams<(typeof
                       footer={
                         review && (
                           <div className="space-y-2 text-[11px]" data-listing-status={review.status}>
+                            <PackageList packages={listing.packages} compact />
                             <div className="flex items-center justify-between gap-2">
                               <span className="text-[#667085]">اعتماد الخدمة:</span>
                               <ListingStatusBadge status={review.status} size="sm" />

@@ -9,7 +9,8 @@ import { QuestionStep } from '../readiness/QuestionStep';
 /**
  * The questionnaire as a factory member answers it, one question at a time, for IMC to check a draft
  * before publishing. Nothing is sent or stored; the total and level at the end follow the ranges
- * of the version being previewed, as the server would classify a real submission.
+ * of the version being previewed, as the server would classify a real submission. The total is
+ * shown to IMC only: a factory member is shown its level, never a score (ADR-026).
  */
 export const QuestionnairePreview: React.FC<{ definition: DefinitionPayload; versionLabel: string; onClose: () => void }> = ({ definition, versionLabel, onClose }) => {
   const flat = useMemo(
@@ -34,6 +35,7 @@ export const QuestionnairePreview: React.FC<{ definition: DefinitionPayload; ver
           <div className="text-4xl font-extrabold text-[#5146A5]">{result.total}</div>
           <div className="text-sm font-bold text-[#172033]">{category ? `${category.name_ar} (${category.min_score}–${category.max_score})` : 'لا يقع المجموع في مستوى واحد'}</div>
           {category && <p className="text-xs text-[#667085] leading-relaxed max-w-lg mx-auto">{category.description_ar}</p>}
+          <p className="text-[11px] text-[#98A2B3]">المجموع والنطاق للوزارة فقط؛ ترى المنشأة مستواها دون أي درجة أو نقاط.</p>
           <Button variant="outline" size="sm" icon={RotateCcw} onClick={() => { setAnswers({}); setStep(0); }}>
             إعادة المعاينة
           </Button>

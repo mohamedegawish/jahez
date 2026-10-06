@@ -38,8 +38,8 @@ export const DigitalReadinessAssessment: React.FC = () => {
         </div>
         <h2 className="text-2xl sm:text-3xl font-extrabold text-[#172033] tracking-tight">تقييم الجاهزية الرقمية للمصنع</h2>
         <p className="text-xs sm:text-sm text-[#667085] max-w-xl mx-auto leading-relaxed">
-          أجب عن أسئلة الاستبيان؛ يحسب الخادم النتيجة ويحدد فئة الجاهزية وخارطة الطريق. لا يمكن تعديل التقييمات السابقة، وكل تقييم جديد
-          يُضاف إلى السجل.
+          أجب عن أسئلة الاستبيان؛ يحدد النظام مستوى الجاهزية الرقمية لمنشأتكم وخارطة الطريق المناسبة له. لا يمكن تعديل التقييمات
+          السابقة، وكل تقييم جديد يُضاف إلى السجل.
         </p>
       </div>
 
@@ -73,7 +73,7 @@ export const DigitalReadinessAssessment: React.FC = () => {
           return (
             <>
               {submitted && submitted.id === shownId ? (
-                <AssessmentResult assessment={submitted} onRetake={() => setStarting(true)} />
+                <AssessmentResult assessment={submitted} factoryId={factoryId} onRetake={() => setStarting(true)} />
               ) : (
                 <ResultLoader factoryId={factoryId} assessmentId={shownId} onRetake={() => setStarting(true)} />
               )}
@@ -195,15 +195,21 @@ const ResultLoader: React.FC<{ factoryId: number; assessmentId: number; onRetake
   const result = useApiQuery((signal) => api.readiness.get(factoryId, assessmentId, signal), [factoryId, assessmentId]);
   return (
     <QueryBoundary query={result} loading={<CardSkeleton />}>
-      {(assessment) => <AssessmentResult assessment={assessment} onRetake={onRetake} />}
+      {(assessment) => <AssessmentResult assessment={assessment} factoryId={factoryId} onRetake={onRetake} />}
     </QueryBoundary>
   );
 };
 
-const AssessmentResult: React.FC<{ assessment: ReadinessAssessment; onRetake: () => void }> = ({ assessment, onRetake }) => {
+const AssessmentResult: React.FC<{ assessment: ReadinessAssessment; factoryId: number; onRetake: () => void }> = ({ assessment, factoryId, onRetake }) => {
   const navigate = useNavigate();
+  // ADR-025: a recommended service opens only when IMC made it available to the factory's level or a level below it.
+  const eligibility = useApiQuery((signal) => api.serviceEligibility.get(factoryId, signal), [factoryId]);
+  const available = new Set((eligibility.data?.services ?? []).map((entry) => entry.service.id));
   const category = assessment.category;
   const roadmap = category?.roadmap;
+  // ADR-026: completing the plan's services of a level opens the next one; the factory then works at that level.
+  const current = eligibility.data?.readiness;
+  const openedByPlan = current?.unlocked_by === 'plan_completion' && current.level !== category?.code ? current : null;
 
   return (
     <div className="space-y-6 animate-in zoom-in-95 duration-200">
@@ -213,10 +219,9 @@ const AssessmentResult: React.FC<{ assessment: ReadinessAssessment; onRetake: ()
         </div>
 
         <div>
-          <span className="text-xs font-bold text-[#667085] uppercase tracking-wider">نتيجة التقييم المعتمدة لمنشأتكم</span>
-          <div className="text-5xl font-black text-[#5146A5] my-2" data-testid="total-score">
-            {assessment.total_score}
-            {assessment.max_score !== undefined && <span className="text-xl text-[#98A2B3] font-bold"> من {assessment.max_score}</span>}
+          <span className="text-xs font-bold text-[#667085] uppercase tracking-wider">مستوى الجاهزية الرقمية لمنشأتكم حسب هذا التقييم</span>
+          <div className="text-3xl sm:text-4xl font-black text-[#5146A5] my-3" data-testid="readiness-level">
+            {category?.name_ar ?? '—'}
           </div>
           <div className="inline-block">
             <ReadinessBadge category={category} />
@@ -231,22 +236,11 @@ const AssessmentResult: React.FC<{ assessment: ReadinessAssessment; onRetake: ()
           <p className="text-xs sm:text-sm text-[#667085] max-w-lg mx-auto leading-relaxed whitespace-pre-line">{category.description_ar}</p>
         )}
 
-        {assessment.pillars && assessment.pillars.length > 0 && (
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-right pt-4 border-t border-[#E6EAF0]">
-            {assessment.pillars.map((pillar) => (
-              <div key={pillar.code} className="p-3 rounded-xl bg-[#F7F9FC] border border-[#E6EAF0]">
-                <span className="text-[11px] text-[#667085] block truncate" title={pillar.name_ar}>{pillar.name_ar}</span>
-                <div className="flex items-center justify-between mt-1">
-                  <span className="font-bold text-[#172033] text-sm">
-                    {pillar.score}/{pillar.max_score}
-                  </span>
-                  <div className="w-12 bg-[#E6EAF0] h-1.5 rounded-full overflow-hidden">
-                    <div className="bg-[#5146A5] h-full" style={{ width: `${pillar.max_score > 0 ? (pillar.score / pillar.max_score) * 100 : 0}%` }} />
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
+        {openedByPlan && (
+          <p className="text-xs sm:text-sm text-[#5146A5] bg-[#EEEAFE]/60 border border-[#D9D2FD] rounded-xl px-4 py-3 max-w-lg mx-auto leading-relaxed">
+            تعمل منشأتكم حاليًا على مستوى «<strong>{openedByPlan.name_ar}</strong>»، وقد فُتح لكم بعد إتمام خدمات المستوى السابق في خطة
+            التحول الرقمي.
+          </p>
         )}
 
         <div className="pt-4 border-t border-[#E6EAF0] flex flex-col sm:flex-row items-center justify-center gap-3">
@@ -283,16 +277,22 @@ const AssessmentResult: React.FC<{ assessment: ReadinessAssessment; onRetake: ()
                       <div className="font-semibold leading-relaxed">{rec.text_ar}</div>
                       {rec.services.length > 0 ? (
                         <div className="flex flex-wrap gap-2 mt-2">
-                          {rec.services.map((service) => (
-                            <button
-                              key={service.id}
-                              type="button"
-                              onClick={() => navigate(`/factory/services/${service.id}`)}
-                              className="px-2.5 py-1 rounded-full bg-[#EEEAFE] text-[#5146A5] text-[11px] font-bold hover:bg-[#9B8AFB] hover:text-white transition-colors cursor-pointer"
-                            >
-                              {service.name_ar}
-                            </button>
-                          ))}
+                          {rec.services.map((service) =>
+                            available.has(service.id) ? (
+                              <button
+                                key={service.id}
+                                type="button"
+                                onClick={() => navigate(`/factory/services/${service.id}`)}
+                                className="px-2.5 py-1 rounded-full bg-[#EEEAFE] text-[#5146A5] text-[11px] font-bold hover:bg-[#9B8AFB] hover:text-white transition-colors cursor-pointer"
+                              >
+                                {service.name_ar}
+                              </button>
+                            ) : (
+                              <span key={service.id} className="px-2.5 py-1 rounded-full bg-[#F1F4F9] text-[#98A2B3] text-[11px] font-bold" title="لم تتحها الوزارة لمستوى منشأتكم أو المستويات السابقة له بعد">
+                                {service.name_ar}
+                              </span>
+                            ),
+                          )}
                         </div>
                       ) : (
                         <div className="text-[11px] text-[#98A2B3] mt-1.5">لا يوجد في الكتالوج الحالي خدمة مقابلة لهذه التوصية (OQ-42).</div>
@@ -330,7 +330,6 @@ const History: React.FC<{
             }`}
           >
             <span className="text-[#667085]">{formatDate(item.completed_at)}</span>
-            <span className="font-bold text-[#172033]">{item.total_score}</span>
             <ReadinessBadge category={item.category} size="sm" />
           </button>
         </li>

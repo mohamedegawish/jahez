@@ -57,6 +57,7 @@ function erpRequest(array $providerIds): array
 describe('factory approval', function () {
     it('lets only an approved factory send requests, and IMC approval opens it', function () {
         $factory = Factory::factory()->withApprovalStatus(FactoryApprovalStatus::Pending)->inSectors('food')->create();
+        availableTo($factory, 'erp_business_applications.01');
         $member = User::factory()->factoryMember($factory)->create();
         $provider = ServiceProvider::factory()->approved()->inSectors('food')->offering('erp_business_applications.01')->create();
 
@@ -81,6 +82,7 @@ describe('factory approval', function () {
     it('lets an unapproved factory send requests when the gate is turned off', function () {
         config(['jahez.factories.approval_required' => false]);
         $factory = Factory::factory()->withApprovalStatus(FactoryApprovalStatus::Pending)->inSectors('food')->create();
+        availableTo($factory, 'erp_business_applications.01');
         $provider = ServiceProvider::factory()->approved()->inSectors('food')->offering('erp_business_applications.01')->create();
 
         Sanctum::actingAs(User::factory()->factoryMember($factory)->create());
@@ -184,7 +186,7 @@ describe('service listing review', function () {
         $provider = ServiceProvider::factory()->approved()->inSectors('food')->create();
         $providerMember = User::factory()->providerMember($provider)->create();
         $reviewer = User::factory()->imcAdmin()->create();
-        $factoryMember = User::factory()->factoryMember(Factory::factory()->inSectors('food')->create())->create();
+        $factoryMember = User::factory()->factoryMember(factoryWithEveryService('food'))->create();
 
         Sanctum::actingAs($providerMember);
         $this->patchJson(route('api.v1.service-providers.update', $provider), ['services' => ['erp_business_applications.01']])
@@ -194,7 +196,8 @@ describe('service listing review', function () {
 
         Sanctum::actingAs($factoryMember);
         $this->getJson(route('api.v1.service-listings.index'))->assertOk()->assertJsonCount(0, 'data');
-        $this->getJson(route('api.v1.provider-directory.show', $provider))->assertOk()->assertJsonCount(0, 'data.services');
+        // ADR-025: a provider with no approved listing of a service the factory may use is not in its directory.
+        $this->getJson(route('api.v1.provider-directory.show', $provider))->assertNotFound();
         $this->postJson(route('api.v1.service-requests.store'), erpRequest([$provider->id]))
             ->assertUnprocessable()->assertJsonValidationErrors('provider_ids');
 
@@ -256,7 +259,7 @@ describe('service listing review', function () {
     });
 
     it('never lets a promotion show a listing IMC has not approved', function () {
-        $factoryMember = User::factory()->factoryMember(Factory::factory()->inSectors('food')->create())->create();
+        $factoryMember = User::factory()->factoryMember(factoryWithEveryService('food'))->create();
         $suspended = ServiceProvider::factory()->approved()->inSectors('food')->listing(ServiceListingStatus::Suspended, 'erp_business_applications.01')->create();
         $approved = ServiceProvider::factory()->approved()->inSectors('food')->offering('erp_business_applications.01')->create();
         foreach ([$suspended, $approved] as $provider) {
@@ -297,7 +300,7 @@ describe('listing resubmission', function () {
         $erp = CatalogService::query()->where('code', 'erp_business_applications.01')->value('id');
         $member = User::factory()->providerMember($provider)->create();
         $reviewer = User::factory()->imcAdmin()->create();
-        $factoryMember = User::factory()->factoryMember(Factory::factory()->inSectors('food')->create())->create();
+        $factoryMember = User::factory()->factoryMember(factoryWithEveryService('food'))->create();
 
         Sanctum::actingAs($member);
         $this->patchJson(route('api.v1.service-providers.update', $provider), ['description' => 'Corrected scope'])->assertOk();
@@ -356,7 +359,7 @@ describe('listing resubmission', function () {
 
     it('never makes a suspended listing eligible for a request', function () {
         $provider = ServiceProvider::factory()->approved()->inSectors('food')->listing(ServiceListingStatus::Suspended, 'erp_business_applications.01')->create();
-        Sanctum::actingAs(User::factory()->factoryMember(Factory::factory()->inSectors('food')->create())->create());
+        Sanctum::actingAs(User::factory()->factoryMember(factoryWithEveryService('food'))->create());
 
         $this->postJson(route('api.v1.service-requests.store'), erpRequest([$provider->id]))->assertUnprocessable()->assertJsonValidationErrors('provider_ids');
         $this->getJson(route('api.v1.catalog.services.index', ['filter' => ['eligible' => 1]]))->assertOk()->assertJsonCount(0, 'data');
@@ -376,7 +379,7 @@ describe('corrections requested from a provider', function () {
             ->assertOk()
             ->assertJsonPath('data.approval.status', 'changes_requested');
 
-        Sanctum::actingAs(User::factory()->factoryMember(Factory::factory()->inSectors('food')->create())->create());
+        Sanctum::actingAs(User::factory()->factoryMember(factoryWithEveryService('food'))->create());
         $this->getJson(route('api.v1.provider-directory.show', $provider))->assertNotFound();
 
         Sanctum::actingAs($member);

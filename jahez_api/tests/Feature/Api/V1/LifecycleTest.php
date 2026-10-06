@@ -50,9 +50,10 @@ it('runs the lifecycle from registration to invoice with every review step enfor
         ->and(eventsOf($admin))->toContain(NotificationEvent::OrganizationRegistered->value);
 
     Sanctum::actingAs($factoryMember);
+    // The factory sees its level, never its score (ADR-026); IMC reads the total in step 3.
     $this->postJson(route('api.v1.factories.readiness-assessments.store', $factory), readinessPayload(readinessChoicesForTotal(27)))
         ->assertCreated()
-        ->assertJsonPath('data.total_score', 27)
+        ->assertJsonMissingPath('data.total_score')
         ->assertJsonPath('data.category.code', 'advanced');
 
     // 2. A provider registers with two services: the provider and both listings wait for review.
@@ -86,9 +87,11 @@ it('runs the lifecycle from registration to invoice with every review step enfor
     Sanctum::actingAs($factoryMember);
     $this->getJson(route('api.v1.service-listings.index'))->assertOk()->assertJsonCount(0, 'data');
 
-    // 4. IMC approves the ERP listing (and leaves the other one pending), and promotes it.
+    // 4. IMC approves the ERP listing (and leaves the other one pending), makes ERP available
+    //    to the factory's readiness level (Advanced, ADR-025) and promotes the listing.
     $erpId = CatalogService::query()->where('code', 'erp_business_applications.01')->value('id');
     Sanctum::actingAs($admin);
+    $this->putJson(route('api.v1.readiness-levels.services.update', ['advanced', $erpId]))->assertCreated();
     $this->postJson(route('api.v1.service-providers.services.review', [$provider, $erpId]), ['decision' => 'approved'])->assertOk();
     $competitor = ServiceProvider::factory()->approved()->inSectors('food')->offering('erp_business_applications.01')->create(['name' => 'Aardvark ERP']);
     $this->postJson(route('api.v1.promotions.store'), ['service_provider_id' => $provider->id, 'service' => 'erp_business_applications.01', 'priority' => 50])->assertCreated();
@@ -193,8 +196,8 @@ it('classifies every boundary total exactly as the framework document states', f
 
     $this->postJson(route('api.v1.factories.readiness-assessments.store', $factory), readinessPayload(readinessChoicesForTotal($total)))
         ->assertCreated()
-        ->assertJsonPath('data.total_score', $total)
         ->assertJsonPath('data.category.code', $category);
+    expect($factory->readinessAssessments()->sole()->total_score)->toBe($total);
 })->with([
     [10, 'b4_automation'], [17, 'b4_automation'],
     [18, 'basic'], [25, 'basic'],

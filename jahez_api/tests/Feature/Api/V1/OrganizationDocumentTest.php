@@ -159,7 +159,7 @@ describe('provider documents', function () {
         $provider = ServiceProvider::factory()->approved()->inSectors('food')->create();
         $document = OrganizationDocument::storeFor($provider, DocumentType::TaxRegistration, UploadedFile::fake()->create('tax.pdf', 10, 'application/pdf'), null);
 
-        foreach ([User::factory()->factoryMember(Factory::factory()->inSectors('food')->create())->create(), User::factory()->providerMember()->create()] as $outsider) {
+        foreach ([User::factory()->factoryMember(factoryWithEveryService('food'))->create(), User::factory()->providerMember()->create()] as $outsider) {
             Sanctum::actingAs($outsider);
             $this->getJson(route('api.v1.service-providers.documents.show', [$provider, $document]))->assertNotFound();
         }
@@ -168,19 +168,19 @@ describe('provider documents', function () {
 
 describe('directory logos', function () {
     it('shows an approved provider\'s logo to the factories it is eligible for', function () {
-        $provider = ServiceProvider::factory()->approved()->inSectors('food')->create();
+        $provider = ServiceProvider::factory()->approved()->inSectors('food')->offering('erp_business_applications.01')->create();
         OrganizationDocument::storeFor($provider, DocumentType::Logo, UploadedFile::fake()->image('logo.png'), null);
-        Sanctum::actingAs(User::factory()->factoryMember(Factory::factory()->inSectors('food')->create())->create());
+        Sanctum::actingAs(User::factory()->factoryMember(factoryWithEveryService('food'))->create());
 
         $this->getJson(route('api.v1.provider-directory.show', $provider))->assertJsonPath('data.has_logo', true);
         $this->get(route('api.v1.provider-directory.logo', $provider))->assertOk()->assertHeader('Content-Type', 'image/png');
     });
 
     it('returns 404 for a provider the factory cannot see, or one without a logo', function () {
-        $hidden = ServiceProvider::factory()->inSectors('food')->create();
+        $hidden = ServiceProvider::factory()->inSectors('food')->offering('erp_business_applications.01')->create();
         OrganizationDocument::storeFor($hidden, DocumentType::Logo, UploadedFile::fake()->image('logo.png'), null);
-        $withoutLogo = ServiceProvider::factory()->approved()->inSectors('food')->create();
-        Sanctum::actingAs(User::factory()->factoryMember(Factory::factory()->inSectors('food')->create())->create());
+        $withoutLogo = ServiceProvider::factory()->approved()->inSectors('food')->offering('erp_business_applications.01')->create();
+        Sanctum::actingAs(User::factory()->factoryMember(factoryWithEveryService('food'))->create());
 
         $this->getJson(route('api.v1.provider-directory.logo', $hidden))->assertNotFound();
         $this->getJson(route('api.v1.provider-directory.logo', $withoutLogo))->assertNotFound();

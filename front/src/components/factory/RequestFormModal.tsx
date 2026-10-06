@@ -20,6 +20,10 @@ interface RequestFormModalProps {
   service: CatalogService;
   /** Providers ticked when the form opens (a listing the factory chose). */
   initialProviderIds?: number[];
+  /** The transformation plan item the request is for (ADR-025); the API checks the link again. */
+  planItemId?: number;
+  /** The provider IMC assigned to the plan item: the request may go to it only (binding). */
+  lockedProviderIds?: number[];
   onClose: () => void;
   onCreated: (request: ServiceRequest) => void;
 }
@@ -28,11 +32,12 @@ interface RequestFormModalProps {
  * A factory asks one or several eligible providers for a service. Nothing about the status is sent:
  * the API opens the request and one pending thread per provider.
  */
-export const RequestFormModal: React.FC<RequestFormModalProps> = ({ service, initialProviderIds = [], onClose, onCreated }) => {
+export const RequestFormModal: React.FC<RequestFormModalProps> = ({ service, initialProviderIds = [], planItemId, lockedProviderIds, onClose, onCreated }) => {
+  const locked = lockedProviderIds !== undefined && lockedProviderIds.length > 0;
   const [title, setTitle] = useState('');
   const [need, setNeed] = useState('');
   const [requirements, setRequirements] = useState('');
-  const [selected, setSelected] = useState<number[]>(initialProviderIds);
+  const [selected, setSelected] = useState<number[]>(locked ? lockedProviderIds : initialProviderIds);
   // The API refuses requests from a factory IMC has not approved (409, ADR-021): say why up front.
   const factory = useMyFactory();
   const blocked = factory.data !== undefined && !factory.data.approval.may_send_requests;
@@ -49,6 +54,7 @@ export const RequestFormModal: React.FC<RequestFormModalProps> = ({ service, ini
       need: need.trim(),
       ...(requirements.trim() ? { requirements: requirements.trim() } : {}),
       provider_ids: selected,
+      ...(planItemId !== undefined ? { transformation_plan_item_id: planItemId } : {}),
     }),
   );
 
@@ -58,13 +64,17 @@ export const RequestFormModal: React.FC<RequestFormModalProps> = ({ service, ini
     if (result.ok) onCreated(result.data);
   };
 
-  const toggle = (id: number) => setSelected((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  const toggle = (id: number) => {
+    if (locked) return;
+    setSelected((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  };
 
   const titleErrors = fieldMessages(create.error, 'title');
   const needErrors = fieldMessages(create.error, 'need');
   const reqErrors = fieldMessages(create.error, 'requirements');
   const providerErrors = fieldMessages(create.error, 'provider_ids');
-  const hasFieldErrors = titleErrors.length + needErrors.length + reqErrors.length + providerErrors.length > 0 || fieldMessages(create.error, 'service').length > 0;
+  const linkErrors = [...fieldMessages(create.error, 'service'), ...fieldMessages(create.error, 'transformation_plan_item_id')];
+  const hasFieldErrors = titleErrors.length + needErrors.length + reqErrors.length + providerErrors.length + linkErrors.length > 0;
 
   return (
     <Modal
@@ -96,7 +106,14 @@ export const RequestFormModal: React.FC<RequestFormModalProps> = ({ service, ini
           يصل الطلب إلى المزودين الذين تختارهم، ويقرر كل مزود بشكل مستقل قبول التفاوض أو الاعتذار. لا يحمل الطلب سعرًا؛ يقدّم المزود سعره في عرضه.
         </p>
         {factory.data && <FactoryApprovalNotice factory={factory.data} compact />}
+        {planItemId !== undefined && (
+          <p className="p-3 rounded-xl bg-[#EEEAFE]/60 border border-[#DDD5FD] text-[#5146A5] leading-relaxed">
+            يُربط هذا الطلب بخدمة من خطة التحول الرقمي لمنشأتكم. إرسال الطلب لا يعني بدء التنفيذ: يسجّل مركز تحديث الصناعة البدء بعد اعتماد الاتفاق واكتمال المتطلبات السابقة.
+            {locked && ' عيّنت الوزارة مزودًا لهذه الخدمة، فيُرسل الطلب إليه وحده.'}
+          </p>
+        )}
         {create.error !== null && !hasFieldErrors && <ApiErrorState compact error={create.error} />}
+        <FieldError messages={linkErrors} />
 
         <div>
           <label htmlFor="request-title" className="font-bold text-[#172033] block mb-1">عنوان الطلب:</label>
@@ -147,7 +164,7 @@ export const RequestFormModal: React.FC<RequestFormModalProps> = ({ service, ini
           >
             {(page) => (
               <div className="space-y-2">
-                {page.data.map((provider) => (
+                {page.data.filter((provider) => !locked || lockedProviderIds.includes(provider.id)).map((provider) => (
                   <label
                     key={provider.id}
                     className={`flex items-start gap-2.5 p-3 rounded-xl border cursor-pointer transition-colors ${
@@ -158,6 +175,7 @@ export const RequestFormModal: React.FC<RequestFormModalProps> = ({ service, ini
                       type="checkbox"
                       data-provider={provider.id}
                       checked={selected.includes(provider.id)}
+                      disabled={locked}
                       onChange={() => toggle(provider.id)}
                       className="mt-0.5 accent-[#5146A5]"
                     />

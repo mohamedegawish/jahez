@@ -26,11 +26,14 @@ A database CHECK constraint enforces the organization link column. The DOC §7 I
 | `audit_logs.view` | Read the audit log (`GET /audit-logs`). Nobody can write, change or delete entries through the API. |
 | `service_providers.approve` | Approve, reject or suspend a provider (P4, ADR-014); read the change-request queue and approve or reject legal change requests (ADR-019) |
 | `service_providers.evaluate` | Record and read DOC §6 provider evaluations (OQ-13 interim) |
-| `service_listings.review` | Approve, reject or suspend one service a provider lists (ADR-021) |
+| `service_listings.review` | Approve, reject or suspend one service a provider lists (ADR-021), including its packages and prices (ADR-027). Only the provider's own members write its packages; IMC reviews them |
 | `announcements.manage` | Create, edit, publish, unpublish and delete draft landing-page announcements (ADR-022). Visitors read live ones without a token |
 | `factories.approve` | Approve, reject, ask for corrections or suspend a factory account (ADR-021); never changes its readiness classification |
-| `assessments.view_any` | Read any factory's readiness assessments and legacy manual classifications (ADR-018). `assessments.create` was removed with manual classification on 2026-10-03 |
+| `assessments.view_any` | Read any factory's readiness assessments and legacy manual classifications (ADR-018). `assessments.create` was removed with manual classification on 2026-10-03. Also the only permission that sees readiness scores (totals, ranges, pillar scores, points); everyone else sees the category and the level (ADR-026) |
 | `readiness_questionnaires.manage` | List questionnaire versions; create, edit, publish and delete drafts (ADR-018 addendum) |
+| `readiness_services.manage` | Make catalog services available to each readiness level, switch them on or off, remove them (ADR-025). Never edits the catalog |
+| `transformation_plans.view_any` | Read every factory's transformation plan, its drafts, review, version history and IMC notes; read the level services (ADR-025) |
+| `transformation_plans.manage` | Create plans; draft, save, publish, discard; suspend, resume, close; delete a never-published plan; record item execution (start, complete, hold, resume, cancel, reopen; owner decision, OQ-52) |
 | `invoices.view_any` | See every invoice and its payments, amounts included (PROPOSED billing oversight, ADR-017) |
 | `invoices.manage` | Draft, edit, issue and cancel invoices **when the approved invoicing policy makes IMC the issuer** (ADR-023, OQ-16) |
 | `financial_policies.view` | Read the financial and contract policies, their versions and history, resolve which policy applies and preview calculations (ADR-023) |
@@ -69,8 +72,19 @@ IMC administrators hold every permission **except** the three granted per person
 | Actor | catalog (`/catalog/*`), reference data (`/reference/*`) and `/readiness-questionnaire` | `filter[eligible]` on services | `filter[recommended]` (services, directory) | provider directory and profiles |
 | --- | --- | --- | --- | --- |
 | IMC admin | ✅ | 422 | 422 | ✅ every approved provider |
-| Factory member | ✅ | ✅ | ✅ once the factory has a readiness assessment (422 before) | ✅ approved providers targeting the factory's sectors (others 404) |
+| Factory member | ✅ reference data; the catalog shows only the services IMC made available to the factory's readiness level (others 404; none before an assessment, ADR-025) | ✅ | ✅ once the factory has a readiness assessment (422 before) | ✅ approved providers targeting the factory's sectors with an approved listing of a service available to its level (others 404) |
 | Provider member | ✅ | 422 | 422 | 403 |
+
+### Readiness levels and transformation plans (ADR-025)
+
+| Actor | `/readiness-levels` (read / change) | `/factories/{id}/service-eligibility` | plan: read | plan: draft, publish, suspend, close, item execution | plan versions |
+| --- | --- | --- | --- | --- | --- |
+| IMC admin | ✅ / ✅ | ✅ any factory | ✅ any plan, with drafts and notes | ✅ | ✅ |
+| Member of this factory | 403 / 403 | ✅ own factory | ✅ once published (draft-only plan 404); no notes, drafts or actors | 403 | 403 |
+| Member of another factory | 403 / 403 | 404 | 404 | 404 | 404 |
+| Provider member | 403 / 403 | 404 | 404 (even an assigned provider) | 404 | 404 |
+
+A factory member sends requests for its plan items through `POST /service-requests` (section below); the assigned provider of an item is binding.
 
 ### Readiness assessments (ADR-018)
 
@@ -81,6 +95,8 @@ IMC administrators hold every permission **except** the three granted per person
 | Member of another factory / provider member | 404 | 404 (before validation) | 404 |
 
 Nobody records a manual classification any more (`POST /factories/{id}/assessments` answers 405).
+
+A factory member reads its own results without any score: no total, score range, pillar score or points, here or on the questionnaire, the factory, the eligibility summary or the listings meta (ADR-026). IMC administrators (`assessments.view_any`) see every score.
 
 ### Service requests and negotiation (P6)
 

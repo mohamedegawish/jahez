@@ -78,6 +78,10 @@ export type Permission =
   | 'service_listings.review'
   | 'assessments.view_any'
   | 'readiness_questionnaires.manage'
+  // Readiness-based eligibility and transformation plans (ADR-025).
+  | 'readiness_services.manage'
+  | 'transformation_plans.view_any'
+  | 'transformation_plans.manage'
   | 'service_requests.view_any'
   | 'agreements.view_any'
   | 'agreements.review'
@@ -253,14 +257,17 @@ export interface ReadinessRoadmap {
   recommendations: ReadinessRecommendation[];
 }
 
-/** ReadinessCategoryResource. `roadmap` is present only when recommendations are loaded. */
+/**
+ * ReadinessCategoryResource. `roadmap` is present only when recommendations are loaded. The score range
+ * goes to IMC administrators only: a factory sees its level, never a score (ADR-026).
+ */
 export interface ReadinessCategory {
   code: ReadinessCategoryCode;
   name_en: string;
   name_ar: string;
   description_ar: string | null;
-  min_score: number;
-  max_score: number;
+  min_score?: number;
+  max_score?: number;
   roadmap?: ReadinessRoadmap;
 }
 
@@ -269,7 +276,8 @@ export interface ReadinessChoice {
   code: string;
   label_ar: string;
   text_ar: string;
-  points: number;
+  /** IMC administrators only (ADR-026). */
+  points?: number;
 }
 
 export interface ReadinessQuestion {
@@ -287,13 +295,18 @@ export interface ReadinessPillar {
   questions: ReadinessQuestion[];
 }
 
-/** `GET /readiness-questionnaire` */
+/** A pillar as IMC administrators receive it: every choice with its points. */
+export interface ScoredReadinessPillar extends Omit<ReadinessPillar, 'questions'> {
+  questions: (Omit<ReadinessQuestion, 'choices'> & { choices: (ReadinessChoice & { points: number })[] })[];
+}
+
+/** `GET /readiness-questionnaire`. The score range and the points are for IMC administrators only (ADR-026). */
 export interface ReadinessQuestionnaire {
   version: number;
   title_ar: string;
   title_en: string | null;
-  min_score: number;
-  max_score: number;
+  min_score?: number;
+  max_score?: number;
   pillars: ReadinessPillar[];
   categories: ReadinessCategory[];
 }
@@ -316,12 +329,14 @@ export interface ReadinessAnswerResult {
   choice_code: string | null;
   choice_label_ar: string | null;
   choice_text_ar?: string | null;
-  points: number;
+  /** IMC administrators only (ADR-026). */
+  points?: number;
 }
 
 /**
  * ReadinessAssessmentResource. List items are the summary; `show` and `store` add the
- * result fields (min/max score, pillars, answers).
+ * result fields (answers, and for IMC min/max score and pillars). The scores (total, ranges,
+ * pillar scores, points) go to IMC administrators only; a factory sees its level (ADR-026).
  */
 export interface ReadinessAssessment {
   id: number;
@@ -329,7 +344,8 @@ export interface ReadinessAssessment {
   /** Only in the IMC list across factories (GET /readiness-assessments). */
   factory?: { id: number; name: string } | null;
   questionnaire_version: number | null;
-  total_score: number;
+  /** IMC administrators only. */
+  total_score?: number;
   category: ReadinessCategory | null;
   submitted_by: { id: number; name: string } | null;
   completed_at: string;
@@ -360,9 +376,12 @@ export interface ReadinessQuestionnaireVersion {
   status: 'draft' | 'current' | 'retired';
   published_at: string | null;
   assessments_count?: number;
-  /** The full structure, on `show`, `store`, `update` and `publish`. */
-  definition?: Omit<ReadinessQuestionnaire, 'categories'> & {
-    categories: (ReadinessCategory & { focus_ar: string; steps_ar: string })[];
+  /** The full structure, on `show`, `store`, `update` and `publish`, with every score (IMC only). */
+  definition?: Omit<ReadinessQuestionnaire, 'categories' | 'pillars' | 'min_score' | 'max_score'> & {
+    min_score: number;
+    max_score: number;
+    pillars: ScoredReadinessPillar[];
+    categories: (ReadinessCategory & { min_score: number; max_score: number; focus_ar: string; steps_ar: string })[];
   };
   /** Who drafted, last changed and published the version; null for the seeded source version. */
   created_by?: { id: number; name: string } | null;
@@ -461,9 +480,25 @@ export interface RegistrationOptions {
 export interface FactoryCurrentReadiness {
   assessment_id: number;
   questionnaire_version: number | null;
-  total_score: number;
+  /** IMC administrators only (ADR-026). */
+  total_score?: number;
   category: { code: ReadinessCategoryCode; name_en: string; name_ar: string } | null;
   completed_at: string;
+}
+
+/** How the factory reached its level: its assessment, or completing its plan's services of the level below. */
+export type ReadinessLevelSource = 'assessment' | 'plan_completion';
+
+/**
+ * The level a factory works at (ADR-026): the highest of its assessment's category and the levels it
+ * opened through its transformation plan. It may use the services of this level and every level below.
+ */
+export interface FactoryReadinessLevel {
+  code: ReadinessCategoryCode;
+  name_ar: string | null;
+  name_en: string | null;
+  unlocked_by: ReadinessLevelSource;
+  unlocked_at: string | null;
 }
 
 /** The onboarding steps of a factory (ADR-019): informational, never a block on the assessment. */
@@ -494,6 +529,8 @@ export interface Factory {
   sectors?: Sector[];
   documents?: OrganizationDocuments;
   current_readiness?: FactoryCurrentReadiness | null;
+  /** Present with `current_readiness`; null before the first assessment. */
+  readiness_level?: FactoryReadinessLevel | null;
   onboarding?: FactoryOnboarding;
   approval: FactoryApproval;
   created_at: string | null;
@@ -515,6 +552,7 @@ export interface FactorySummary {
   logo?: { id: number; uploaded_at: string | null } | null;
   onboarding?: FactoryOnboarding;
   current_readiness?: FactoryCurrentReadiness | null;
+  readiness_level?: FactoryReadinessLevel | null;
   approval: FactoryApproval;
   /** Which profile fields are filled: field names and counts only, never values. */
   profile_completion?: { filled: number; total: number; missing: string[] };
@@ -580,6 +618,89 @@ export interface ServiceListingReview {
 /** One entry of ServiceProviderResource.service_listings. */
 export interface ProviderServiceListing extends ServiceListingReview {
   service: { id: number; code: string; name_ar: string; category: { code: string; name_ar: string } | null };
+  /** The provider's packages and prices for the service (ADR-027). */
+  packages?: ServiceListingPackage[];
+}
+
+// ───────────────────────── Listing packages and the cart (ADR-027) ─────────────────────────
+
+export type BillingPeriod = 'monthly' | 'annual';
+
+/**
+ * A package a provider lists for a service: a name and, each optional, a monthly price, an annual price (EGP
+ * decimal strings, informational) and the number of users the price covers. At least one price.
+ */
+export interface ServiceListingPackage {
+  id: number;
+  name_ar: string;
+  monthly_price: string | null;
+  annual_price: string | null;
+  users_count: number | null;
+}
+
+/** `PUT /service-providers/{id}/services/{serviceId}/packages`: the whole list, in display order. */
+export interface ServiceListingPackageInput {
+  name_ar: string;
+  monthly_price: string | null;
+  annual_price: string | null;
+  users_count: number | null;
+}
+
+/** Why a cart item cannot be sent now. */
+export type CartUnavailableReason = 'service_not_available' | 'provider_not_eligible';
+
+/** One item of the member's cart. */
+export interface ServiceCartItem {
+  id: number;
+  service: { id: number; code: string; name_ar: string; category: { code: string; name_ar: string } | null };
+  provider: { id: number; name: string };
+  package: ServiceListingPackage | null;
+  billing_period: BillingPeriod | null;
+  users_count: number | null;
+  /** The listed price of the chosen package for the chosen period. */
+  price: string | null;
+  /** The listing's packages, to choose from. */
+  packages: ServiceListingPackage[];
+  available: boolean;
+  unavailable_reason: CartUnavailableReason | null;
+  added_at: string | null;
+}
+
+/** `GET /cart`. The totals are estimates from the listed prices of the available items, never a quote. */
+export interface ServiceCart {
+  items: ServiceCartItem[];
+  summary: {
+    items_count: number;
+    services_count: number;
+    available_items_count: number;
+    currency: 'EGP';
+    estimated_monthly_total: string;
+    estimated_annual_total: string;
+  };
+}
+
+/** `POST /cart/items`; adding a listing already in the cart replaces its choice. */
+export interface ServiceCartItemInput {
+  service: string;
+  provider_id: number;
+  package_id?: number | null;
+  billing_period?: BillingPeriod | null;
+  users_count?: number | null;
+}
+
+/** `POST /cart/checkout`: one request per service, to every provider in the cart for it. */
+export interface ServiceCartCheckoutEntry {
+  service: string;
+  title: string;
+  need: string;
+  requirements?: string | null;
+}
+
+/** What the factory chose from the provider's listing in its cart, kept on the thread as listed then. */
+export interface ProviderRequestSelection {
+  package: ServiceListingPackage | null;
+  billing_period: BillingPeriod | null;
+  users_count: number | null;
 }
 
 export interface ProviderApproval {
@@ -791,6 +912,8 @@ export interface ProviderRequest {
   status_reason: string | null;
   status_changed_at: string | null;
   agreed_offer_id: number | null;
+  /** The two parties only: the cart choice the request was sent with (ADR-027), or null. */
+  selection?: ProviderRequestSelection | null;
   agreement_id?: number | null;
   /** The agreement's IMC review and contract-draft statuses, never its terms (ADR-020). */
   agreement?: { id: number; review_status: AgreementReviewStatus | null; contract_status: ContractStatus | null } | null;
@@ -809,6 +932,8 @@ export interface ServiceRequest {
   id: number;
   factory?: { id: number; name: string } | null;
   service?: CatalogService;
+  /** The transformation plan item the request was sent for (ADR-025), or null. */
+  transformation_plan_item_id: number | null;
   title: string;
   need: string;
   requirements: string | null;
@@ -828,6 +953,8 @@ export interface ServiceRequestCreatePayload {
   requirements?: string | null;
   /** 1–20 provider ids, each eligible for the factory. */
   provider_ids: number[];
+  /** Links the request to an item of the factory's published plan (ADR-025). */
+  transformation_plan_item_id?: number | null;
 }
 
 export interface ProviderRequestTransition {
@@ -1175,6 +1302,8 @@ export interface ServiceListing {
   service: { id: number; code: string; name_ar: string; category: { code: string; name_ar: string } | null } | null;
   /** An IMC promotion: labelled «إعلان». Never makes a listing eligible. */
   promotion: { id: number; label: string; headline: string | null; ends_at: string | null } | null;
+  /** The provider's packages and prices for the service (ADR-027). */
+  packages: ServiceListingPackage[];
   /** Factory viewers: whether the readiness roadmap recommends the service. */
   recommended: boolean | null;
   /** IMC and the provider itself (ADR-021); a factory only ever sees approved listings. */
@@ -1184,12 +1313,11 @@ export interface ServiceListing {
 export interface ServiceListingPage extends Paginated<ServiceListing> {
   meta: PageMeta & {
     viewer?: 'factory' | 'provider' | 'imc' | 'other';
+    /** Why a factory's list may be empty: no assessment means no service (ADR-025). */
+    eligibility_status?: EligibilityStatus;
     has_sectors?: boolean;
-    readiness?: {
-      category: { code: string; name_ar: string } | null;
-      total_score: number;
-      completed_at: string;
-    } | null;
+    /** The factory's level, never its score (ADR-026). */
+    readiness?: EligibilityReadiness | null;
   };
 }
 
@@ -1494,3 +1622,279 @@ export type AgreementFinancialReadiness = Record<
   'contract_drafting' | 'invoice_drafting' | 'invoice_issuing' | 'gateway_payment' | 'contract_signature' | 'payouts',
   { available: boolean; reasons: FinancialReadinessReason[] }
 >;
+
+// ───────────────────────── Readiness-based eligibility (ADR-025) ─────────────────────────
+
+/** `no_assessment`: the factory has not completed the readiness assessment, so no service is available. */
+export type EligibilityStatus = 'eligible' | 'no_assessment';
+
+/**
+ * A factory's readiness as the eligibility endpoints give it (ADR-025, ADR-026). `level` and `name_ar` are the
+ * level the factory works at; `assessed_level` is the category of its assessment. `total_score` is IMC-only.
+ */
+export interface EligibilityReadiness {
+  assessment_id: number;
+  level: ReadinessCategoryCode | null;
+  name_ar: string | null;
+  unlocked_by?: ReadinessLevelSource;
+  unlocked_at?: string | null;
+  assessed_level?: ReadinessCategoryCode | null;
+  assessed_name_ar?: string | null;
+  total_score?: number;
+  completed_at: string;
+}
+
+/** `GET /factories/{id}/service-eligibility`: what the factory may use, decided by the server. */
+export interface FactoryServiceEligibility {
+  factory_id: number;
+  status: EligibilityStatus;
+  has_sectors: boolean;
+  may_send_requests: boolean;
+  readiness: EligibilityReadiness | null;
+  services: {
+    service: CatalogService;
+    eligible_providers_count: number;
+    recommended: boolean;
+  }[];
+}
+
+/** One service of a readiness level (IMC administration). */
+export interface ReadinessLevelServiceEntry {
+  service: CatalogService;
+  is_active: boolean;
+  /** Approved providers with an approved listing, whatever their sectors. */
+  approved_provider_count: number;
+  /** The level's readiness roadmap recommends it: a hint, never an availability. */
+  recommended: boolean;
+  updated_at: string | null;
+}
+
+export interface ReadinessLevelAdmin {
+  code: ReadinessCategoryCode;
+  name_ar: string | null;
+  name_en: string | null;
+  min_score: number | null;
+  max_score: number | null;
+  recommended_service_ids: number[];
+  services: ReadinessLevelServiceEntry[];
+}
+
+/** `GET /readiness-levels` */
+export interface ReadinessLevelsOverview {
+  levels: ReadinessLevelAdmin[];
+  summary: {
+    catalog_service_count: number;
+    unassigned_services: CatalogService[];
+    multi_level_service_ids: number[];
+    without_provider_service_ids: number[];
+  };
+}
+
+// ───────────────────────── Transformation plans (ADR-025) ─────────────────────────
+
+export type TransformationPlanStatus = 'draft' | 'published' | 'suspended' | 'closed';
+export type TransformationPlanVersionStatus = 'draft' | 'published' | 'superseded';
+export type PlanItemExecutionStatus = 'not_started' | 'in_progress' | 'on_hold' | 'completed' | 'cancelled';
+export type PlanItemState =
+  | 'waiting_prerequisites'
+  | 'not_started'
+  | 'awaiting_approval'
+  | 'ready'
+  | 'in_progress'
+  | 'on_hold'
+  | 'completed'
+  | 'cancelled';
+export type PlanRequestProgress =
+  | 'open'
+  | 'negotiating'
+  | 'no_active_provider'
+  | 'awaiting_imc_review'
+  | 'agreed'
+  | 'imc_approved'
+  | 'imc_rejected'
+  | 'cancelled';
+export type PlanStageStatus = 'not_started' | 'in_progress' | 'completed' | 'cancelled';
+export type PlanItemAction = 'start' | 'complete' | 'hold' | 'resume' | 'cancel' | 'reopen';
+export type PlanItemAttention = 'service_unavailable' | 'no_active_provider' | 'agreement_rejected' | 'prerequisite_cancelled';
+
+/** Counted from recorded execution statuses; `percent` is null when no item counts. */
+export interface PlanProgress {
+  total: number;
+  completed: number;
+  in_progress: number;
+  on_hold: number;
+  cancelled: number;
+  percent: number | null;
+}
+
+export interface PlanItemRef {
+  item_id: number;
+  service_name_ar: string;
+  execution_status: PlanItemExecutionStatus;
+}
+
+export interface PlanItemRequestSummary {
+  id: number;
+  status: ServiceRequestStatus;
+  progress: PlanRequestProgress;
+  awarded_provider: { id: number; name: string } | null;
+  agreement_id: number | null;
+  active_provider_count: number;
+  provider_count: number;
+  created_at: string | null;
+}
+
+export interface PlanItem {
+  /** The placement id in this version. */
+  id: number;
+  /** The plan item id: stable across versions, used for requests and actions. */
+  item_id: number;
+  position: number;
+  service: { id: number; code: string; name_ar: string; category: { code: string; name_ar: string } | null };
+  provider: { id: number; name: string; has_logo: boolean } | null;
+  instructions_ar: string | null;
+  /** IMC only. */
+  internal_notes?: string | null;
+  planned_start_date: string | null;
+  planned_end_date: string | null;
+  execution_status: PlanItemExecutionStatus;
+  state: PlanItemState;
+  started_at: string | null;
+  completed_at: string | null;
+  status_changed_at: string | null;
+  /** IMC only. */
+  status_reason?: string | null;
+  depends_on: PlanItemRef[];
+  waiting_for: PlanItemRef[];
+  dependents: number[];
+  parallel_with: number[];
+  service_available: boolean;
+  request: PlanItemRequestSummary | null;
+  requests_count: number;
+  can_request: boolean;
+  /** IMC only. */
+  allowed_actions?: PlanItemAction[];
+  /** IMC only. */
+  attention?: PlanItemAttention[];
+}
+
+export interface PlanStage {
+  id: number;
+  number: number;
+  name_ar: string;
+  objective_ar: string | null;
+  description_ar: string | null;
+  factory_instructions_ar: string | null;
+  /** IMC only. */
+  internal_notes?: string | null;
+  planned_start_date: string | null;
+  planned_end_date: string | null;
+  status: PlanStageStatus;
+  progress: PlanProgress;
+  items: PlanItem[];
+}
+
+export interface PlanActor {
+  id: number;
+  name: string;
+}
+
+export interface PlanVersionView {
+  id: number;
+  version: number;
+  status: TransformationPlanVersionStatus;
+  title: string;
+  summary_ar: string | null;
+  revision?: number;
+  change_note?: string | null;
+  based_on_version_id?: number | null;
+  created_by?: PlanActor | null;
+  updated_by?: PlanActor | null;
+  published_by?: PlanActor | null;
+  superseded_at?: string | null;
+  updated_at?: string | null;
+  published_at: string | null;
+  progress: PlanProgress;
+  stages: PlanStage[];
+}
+
+export interface PlanReviewProblem {
+  code: string;
+  blocking: boolean;
+  message: string;
+  stage_position: number | null;
+  service_code: string | null;
+}
+
+/** TransformationPlanResource. IMC-only fields are absent for a factory member. */
+export interface TransformationPlan {
+  id: number;
+  factory?: { id: number; name: string };
+  status: TransformationPlanStatus;
+  status_reason?: string | null;
+  status_changed_at: string | null;
+  published_version: { id: number; version: number; title: string; published_at: string | null } | null;
+  progress: PlanProgress | null;
+  draft_version?: { id: number; version: number; revision: number; title: string; updated_at: string | null } | null;
+  readiness_basis?: EligibilityReadiness | null;
+  created_at: string | null;
+  updated_at: string | null;
+  /** Detailed responses only. */
+  published?: PlanVersionView | null;
+  current_readiness?: EligibilityReadiness | null;
+  /** IMC: the level the factory works at now, including a level opened through the plan (ADR-026). */
+  current_level?: FactoryReadinessLevel | null;
+  readiness_changed?: boolean;
+  draft?: PlanVersionView | null;
+  review?: PlanReviewProblem[] | null;
+}
+
+/** `GET /transformation-plans/{id}/versions` */
+export interface TransformationPlanVersionSummary {
+  id: number;
+  version: number;
+  status: TransformationPlanVersionStatus;
+  title: string;
+  revision: number;
+  change_note: string | null;
+  based_on_version_id: number | null;
+  stage_count: number;
+  item_count: number;
+  created_by: PlanActor | null;
+  updated_by: PlanActor | null;
+  published_by: PlanActor | null;
+  created_at: string | null;
+  updated_at: string | null;
+  published_at: string | null;
+  superseded_at: string | null;
+}
+
+export interface PlanDraftItemPayload {
+  service: string;
+  service_provider_id?: number | null;
+  instructions_ar?: string | null;
+  internal_notes?: string | null;
+  planned_start_date?: string | null;
+  planned_end_date?: string | null;
+  depends_on?: string[];
+}
+
+export interface PlanDraftStagePayload {
+  name_ar: string;
+  objective_ar?: string | null;
+  description_ar?: string | null;
+  factory_instructions_ar?: string | null;
+  internal_notes?: string | null;
+  planned_start_date?: string | null;
+  planned_end_date?: string | null;
+  items: PlanDraftItemPayload[];
+}
+
+/** `PUT /transformation-plans/{id}/draft`: the whole structure, in order. */
+export interface PlanDraftPayload {
+  based_on_revision: number;
+  title: string;
+  summary_ar?: string | null;
+  change_note?: string | null;
+  stages: PlanDraftStagePayload[];
+}

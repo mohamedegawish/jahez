@@ -8,16 +8,23 @@ use App\Http\Resources\V1\CatalogServiceResource;
 use App\Models\CatalogService;
 use App\Models\Factory;
 use App\Models\User;
+use App\Readiness\ServiceEligibility;
 use Illuminate\Container\Attributes\CurrentUser;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Illuminate\Support\Facades\DB;
 
 class CatalogServiceController extends Controller
 {
+    public function __construct(private readonly ServiceEligibility $eligibility) {}
+
     /**
      * The catalog's services in workbook order (reference data, 42 rows: not paginated).
-     * With filter[eligible], a factory member gets only the services that at least one
-     * provider eligible for their factory offers.
+     * A factory member sees only the services available to its readiness level
+     * (ServiceEligibility, ADR-025); none before its first assessment. With
+     * filter[eligible] they are narrowed to those at least one provider eligible for the
+     * factory offers, and with filter[recommended] to its readiness roadmap's services.
+     * IMC administrators and providers see the whole catalog.
      */
     public function index(ListCatalogServicesRequest $request, #[CurrentUser] User $user): AnonymousResourceCollection
     {
@@ -25,13 +32,14 @@ class CatalogServiceController extends Controller
 
         $services = CatalogService::query()
             ->with('category')
+            ->when($factory, fn (Builder $query, Factory $factory) => $query->whereIn('catalog_services.id', $this->eligibility->serviceIdsFor($factory)))
             ->when($request->input('filter.category'), fn (Builder $query, string $code) => $query->whereHas(
                 'category',
                 fn (Builder $categories) => $categories->where('code', $code),
             ))
-            ->when($request->boolean('filter.eligible') ? $factory : null, fn (Builder $query, Factory $factory) => $query->whereHas(
-                'approvedProviders',
-                fn (Builder $providers) => $providers->eligibleFor($factory),
+            ->when($request->boolean('filter.eligible') ? $factory : null, fn (Builder $query, Factory $factory) => $query->whereIn(
+                'catalog_services.id',
+                $this->eligibility->constrainListings(DB::table('catalog_service_service_provider as l')->select('l.catalog_service_id'), $factory),
             ))
             ->when($request->boolean('filter.recommended') ? $factory : null, fn (Builder $query, Factory $factory) => $query->whereIn(
                 'catalog_services.id',
@@ -44,8 +52,18 @@ class CatalogServiceController extends Controller
         return CatalogServiceResource::collection($services);
     }
 
-    public function show(CatalogService $catalogService): CatalogServiceResource
+    /**
+     * One catalog service. For a factory member, a service its readiness level does not
+     * make available is reported as not found.
+     */
+    public function show(CatalogService $catalogService, #[CurrentUser] User $user): CatalogServiceResource
     {
+        $factory = $user->industrialFactory;
+
+        if ($factory !== null && ! $this->eligibility->isServiceAvailable($factory, $catalogService)) {
+            abort(404);
+        }
+
         return new CatalogServiceResource($catalogService->load('category'));
     }
 }

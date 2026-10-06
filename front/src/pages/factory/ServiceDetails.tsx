@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowRight, Send, Sparkles, Users } from 'lucide-react';
-import { api } from '../../api';
+import { api, isNotFound } from '../../api';
 import type { ProviderDirectoryEntry } from '../../api';
 import { useApiQuery } from '../../hooks/useApiQuery';
 import { useMyFactory } from '../../hooks/useMyOrganization';
@@ -35,6 +35,14 @@ export const ServiceDetails: React.FC = () => {
       {serviceId === null ? (
         // A non-numeric id is a 404 on the API too; there is nothing to request.
         <EmptyState title="الخدمة غير موجودة" description="رابط الخدمة غير صالح." actionText="العودة للكتالوج" onAction={() => navigate('/factory/catalog')} />
+      ) : service.status === 'error' && isNotFound(service.error) ? (
+        // ADR-025/026: a service neither the factory's level nor a level below it makes available is reported as not found.
+        <EmptyState
+          title="هذه الخدمة غير متاحة لمستوى جاهزية منشأتكم"
+          description="تحدد الوزارة الخدمات المتاحة لكل مستوى جاهزية رقمية، وتُفتح خدمات المستوى التالي بعد إتمام خدمات مستواكم في خطة التحول. تصفحوا الخدمات المتاحة لكم."
+          actionText="الخدمات المتاحة"
+          onAction={() => navigate('/factory/catalog')}
+        />
       ) : (
         <QueryBoundary query={service} loading={<CardSkeleton />}>
           {(s) => (
@@ -53,7 +61,7 @@ export const ServiceDetails: React.FC = () => {
                 </div>
                 <p className="text-xs sm:text-sm text-[#667085] leading-relaxed pt-3 border-t border-[#F1F4F9]">
                   تفاصيل التنفيذ والسعر والمدة يحددها كل مزود في عرضه على طلبك؛ لا يحمل الكتالوج أسعارًا ثابتة. المزودون أدناه معتمدون من مركز
-                  تحديث الصناعة ويستهدفون قطاعات منشأتك.
+                  تحديث الصناعة ويستهدفون قطاعات منشأتك، والخدمة متاحة لمستوى جاهزيتك.
                 </p>
               </div>
 

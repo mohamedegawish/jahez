@@ -1298,11 +1298,436 @@
       ]
     },
     {
-      "name": "05 Service Catalog",
-      "description": "The services workbook: 7 categories and 42 services. Any signed-in account can read it. Read-only.",
+      "name": "04a Readiness Eligibility Setup (ADR-025)",
+      "description": "A factory sees and requests only the services IMC made available to its readiness level (ADR-025). Before the catalog, directory and request folders run as Factory A, Factory A completes the assessment (ten «ب», 20 points, Basic) and the administrator makes the three demo services available to Basic.",
       "item": [
         {
-          "name": "List catalog categories",
+          "name": "Catalog service ids (administrator)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "const byCode = {}; pm.response.json().data.forEach(function (s) { byCode[s.code] = s.id; });",
+                  "pm.environment.set('svc_erp_id', byCode['erp_business_applications.01']);",
+                  "pm.environment.set('svc_mes_id', byCode['automation_ot.01']);",
+                  "pm.environment.set('svc_ot_security_id', byCode['ot_ics_cybersecurity.01']);",
+                  "pm.environment.set('svc_twin_id', byCode['digital_engineering_smart_manufacturing.01']);",
+                  "pm.test('The whole catalog for IMC', function () { pm.expect(pm.response.json().data.length).to.eql(42); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}{{api_prefix}}/catalog/services",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "{{api_prefix}}",
+                "catalog",
+                "services"
+              ]
+            },
+            "description": "Expected 200 with all 42 services (IMC is not narrowed). Stores the ids used below."
+          },
+          "response": []
+        },
+        {
+          "name": "No service before an assessment (Factory A member)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test('Empty, and says why', function () {",
+                  "    pm.expect(pm.response.json().data.length).to.eql(0);",
+                  "    pm.expect(pm.response.json().meta.eligibility_status).to.eql('no_assessment');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{factory_a_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}{{api_prefix}}/service-listings",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "{{api_prefix}}",
+                "service-listings"
+              ]
+            },
+            "description": "Expected 200 with no listing and `meta.eligibility_status` = `no_assessment`."
+          },
+          "response": []
+        },
+        {
+          "name": "Current questionnaire (Factory A member)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "const answers = []; pm.response.json().data.pillars.forEach(function (p) { p.questions.forEach(function (q) { answers.push({ question_id: q.id, choice_id: q.choices.filter(function (c) { return c.code === 'b'; })[0].id }); }); });",
+                  "pm.environment.set('setup_answers_b', JSON.stringify(answers));",
+                  "pm.environment.set('setup_version', String(pm.response.json().data.version));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{factory_a_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}{{api_prefix}}/readiness-questionnaire",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "{{api_prefix}}",
+                "readiness-questionnaire"
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Factory A completes the assessment (Basic)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 201', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "pm.test('Basic, and no score for the factory (ADR-026)', function () { pm.expect(pm.response.json().data.category.code).to.eql('basic'); pm.expect(pm.response.json().data).to.not.have.property('total_score'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{factory_a_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}{{api_prefix}}/factories/{{factory_a_id}}/readiness-assessments",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "{{api_prefix}}",
+                "factories",
+                "{{factory_a_id}}",
+                "readiness-assessments"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"questionnaire_version\": {{setup_version}},\n  \"answers\": {{setup_answers_b}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Make ERP (erp_business_applications.01) available to Basic (administrator)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Created or already there (201/200)', function () { pm.expect(pm.response.code).to.be.oneOf([200, 201]); });",
+                  "pm.test('Active at Basic', function () { pm.expect(pm.response.json().data.is_active).to.eql(true); pm.expect(pm.response.json().data.level).to.eql('basic'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}{{api_prefix}}/readiness-levels/basic/services/{{svc_erp_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "{{api_prefix}}",
+                "readiness-levels",
+                "basic",
+                "services",
+                "{{svc_erp_id}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"is_active\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Make MES (automation_ot.01) available to Basic (administrator)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Created or already there (201/200)', function () { pm.expect(pm.response.code).to.be.oneOf([200, 201]); });",
+                  "pm.test('Active at Basic', function () { pm.expect(pm.response.json().data.is_active).to.eql(true); pm.expect(pm.response.json().data.level).to.eql('basic'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}{{api_prefix}}/readiness-levels/basic/services/{{svc_mes_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "{{api_prefix}}",
+                "readiness-levels",
+                "basic",
+                "services",
+                "{{svc_mes_id}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"is_active\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Make OT security (ot_ics_cybersecurity.01) available to Basic (administrator)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Created or already there (201/200)', function () { pm.expect(pm.response.code).to.be.oneOf([200, 201]); });",
+                  "pm.test('Active at Basic', function () { pm.expect(pm.response.json().data.is_active).to.eql(true); pm.expect(pm.response.json().data.level).to.eql('basic'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}{{api_prefix}}/readiness-levels/basic/services/{{svc_ot_security_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "{{api_prefix}}",
+                "readiness-levels",
+                "basic",
+                "services",
+                "{{svc_ot_security_id}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"is_active\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Level administration as a factory member (403)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 403', function () {",
+                  "    pm.response.to.have.status(403);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{factory_a_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}{{api_prefix}}/readiness-levels",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "{{api_prefix}}",
+                "readiness-levels"
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "05 Service Catalog",
+      "description": "The services workbook: 7 categories and 42 services, read in full by IMC. A factory member sees only the services IMC made available to its readiness level (ADR-025; see folders 04a and 21). Read-only.",
+      "item": [
+        {
+          "name": "List catalog categories (administrator)",
           "event": [
             {
               "listen": "test",
@@ -1335,7 +1760,7 @@
               },
               {
                 "key": "Authorization",
-                "value": "Bearer {{factory_a_token}}"
+                "value": "Bearer {{admin_token}}"
               }
             ],
             "url": {
@@ -1354,7 +1779,7 @@
           "response": []
         },
         {
-          "name": "Show a catalog category",
+          "name": "Show a catalog category (administrator)",
           "event": [
             {
               "listen": "test",
@@ -1384,7 +1809,7 @@
               },
               {
                 "key": "Authorization",
-                "value": "Bearer {{factory_a_token}}"
+                "value": "Bearer {{admin_token}}"
               }
             ],
             "url": {
@@ -1404,7 +1829,7 @@
           "response": []
         },
         {
-          "name": "List the services of a category",
+          "name": "List the services of a category (administrator)",
           "event": [
             {
               "listen": "test",
@@ -1436,7 +1861,7 @@
               },
               {
                 "key": "Authorization",
-                "value": "Bearer {{factory_a_token}}"
+                "value": "Bearer {{admin_token}}"
               }
             ],
             "url": {
@@ -2082,8 +2507,9 @@
                   "pm.test('Has five pillars of two questions with four choices each', function () {",
                   "    const data = pm.response.json().data;",
                   "    pm.expect(data.pillars.length).to.eql(5);",
-                  "    pm.expect(data.min_score).to.eql(10);",
-                  "    pm.expect(data.max_score).to.eql(40);",
+                  "    pm.expect(data).to.not.have.property('min_score');",
+                  "    pm.expect(data).to.not.have.property('max_score');",
+                  "    pm.expect(data.pillars[0].questions[0].choices[0]).to.not.have.property('points');",
                   "    const answersB = [];",
                   "    data.pillars.forEach(function (pillar) {",
                   "        pm.expect(pillar.questions.length).to.eql(2);",
@@ -2127,7 +2553,7 @@
                 "readiness-questionnaire"
               ]
             },
-            "description": "Expected 200. Stores the version and, for the next requests, one «ب» answer (2 points) per question."
+            "description": "Expected 200. Stores the version and, for the next requests, one «ب» answer per question. A factory member gets no points and no score range (ADR-026); IMC administrators do."
           },
           "response": []
         },
@@ -2142,12 +2568,13 @@
                   "pm.test('Status is 201', function () {",
                   "    pm.response.to.have.status(201);",
                   "});",
-                  "pm.test('Scored and classified by the server', function () {",
+                  "pm.test('Classified by the server; the factory sees its level, never a score', function () {",
                   "    const data = pm.response.json().data;",
-                  "    pm.expect(data.total_score).to.eql(20);",
                   "    pm.expect(data.category.code).to.eql('basic');",
-                  "    pm.expect(data.pillars.length).to.eql(5);",
+                  "    pm.expect(data).to.not.have.property('total_score');",
+                  "    pm.expect(data).to.not.have.property('pillars');",
                   "    pm.expect(data.answers.length).to.eql(10);",
+                  "    pm.expect(data.answers[0]).to.not.have.property('points');",
                   "    pm.environment.set('readiness_assessment_id', String(data.id));",
                   "});"
                 ]
@@ -2191,7 +2618,7 @@
                 }
               }
             },
-            "description": "Expected 201: ten «ب» answers total 20, category Basic. The `total_score` and `category` in the body are ignored; the server calculates them."
+            "description": "Expected 201: ten «ب» answers total 20, category Basic. The `total_score` and `category` in the body are ignored; the server calculates them. The factory member's response carries the category and the answers only: the total, the pillar scores and the points go to IMC administrators (ADR-026)."
           },
           "response": []
         },
@@ -2313,6 +2740,9 @@
                   "    const data = pm.response.json().data;",
                   "    pm.expect(String(data.current_readiness.assessment_id)).to.eql(pm.environment.get('readiness_assessment_id'));",
                   "    pm.expect(data.current_readiness.category.code).to.eql('basic');",
+                  "    pm.expect(data.current_readiness).to.not.have.property('total_score');",
+                  "    pm.expect(data.readiness_level.code).to.eql('basic');",
+                  "    pm.expect(data.readiness_level.unlocked_by).to.eql('assessment');",
                   "});"
                 ]
               }
@@ -12076,6 +12506,1933 @@
               "path": [
                 "{{api_prefix}}",
                 "factories"
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "21 Readiness Eligibility & Transformation Plans (ADR-025)",
+      "description": "Readiness-based eligibility and the factory transformation plan: IMC builds a multi-stage plan with parallel and sequential services, publishes it, the factory sends a request linked to a plan item, and IMC records execution only once the agreement is approved.",
+      "item": [
+        {
+          "name": "Level services overview (administrator)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test('Four levels with their ranges; Basic has the setup services', function () {",
+                  "    const levels = pm.response.json().data.levels;",
+                  "    pm.expect(levels.map(function (l) { return l.code; })).to.eql(['b4_automation', 'basic', 'advanced', 'smart']);",
+                  "    const basic = levels.filter(function (l) { return l.code === 'basic'; })[0];",
+                  "    pm.expect(basic.min_score).to.eql(18); pm.expect(basic.max_score).to.eql(25);",
+                  "    pm.expect(basic.services.length >= 3).to.eql(true);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}{{api_prefix}}/readiness-levels",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "{{api_prefix}}",
+                "readiness-levels"
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Eligibility summary (Factory A member)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test('Basic, with the services of its level', function () {",
+                  "    const d = pm.response.json().data;",
+                  "    pm.expect(d.status).to.eql('eligible'); pm.expect(d.readiness.level).to.eql('basic');",
+                  "    pm.expect(d.services.map(function (s) { return s.service.code; })).to.include('erp_business_applications.01');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{factory_a_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}{{api_prefix}}/factories/{{factory_a_id}}/service-eligibility",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "{{api_prefix}}",
+                "factories",
+                "{{factory_a_id}}",
+                "service-eligibility"
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "A service outside the level (Factory A member, 404)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 404', function () {",
+                  "    pm.response.to.have.status(404);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{factory_a_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}{{api_prefix}}/catalog/services/{{svc_twin_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "{{api_prefix}}",
+                "catalog",
+                "services",
+                "{{svc_twin_id}}"
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Request a service outside the level (422)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 422', function () {",
+                  "    pm.response.to.have.status(422);",
+                  "});",
+                  "pm.test('Reports the field service', function () { pm.expect(pm.response.json().errors).to.have.any.keys('service'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{factory_a_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}{{api_prefix}}/service-requests",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "{{api_prefix}}",
+                "service-requests"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"service\": \"digital_engineering_smart_manufacturing.01\",\n  \"title\": \"Twin\",\n  \"need\": \"Digital twin\",\n  \"provider_ids\": [{{provider_p_id}}],\n  \"level\": \"smart\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Create the plan of Factory A (administrator)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 201', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "pm.environment.set('plan_id', pm.response.json().data.id);",
+                  "pm.test('A draft', function () { pm.expect(pm.response.json().data.status).to.eql('draft'); pm.expect(pm.response.json().data.draft.revision).to.eql(0); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}{{api_prefix}}/factories/{{factory_a_id}}/transformation-plans",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "{{api_prefix}}",
+                "factories",
+                "{{factory_a_id}}",
+                "transformation-plans"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"خطة التحول الرقمي\",\n  \"summary_ar\": \"خطة من مرحلتين.\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "A cycle is refused (422)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 422', function () {",
+                  "    pm.response.to.have.status(422);",
+                  "});",
+                  "pm.test('Reports the cycle', function () { pm.expect(pm.response.json().errors).to.have.any.keys('stages'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}{{api_prefix}}/transformation-plans/{{plan_id}}/draft",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "{{api_prefix}}",
+                "transformation-plans",
+                "{{plan_id}}",
+                "draft"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"based_on_revision\": 0,\n  \"title\": \"خطة\",\n  \"stages\": [\n    {\n      \"name_ar\": \"أولى\",\n      \"items\": [\n        {\n          \"service\": \"erp_business_applications.01\",\n          \"depends_on\": [\n            \"automation_ot.01\"\n          ]\n        },\n        {\n          \"service\": \"automation_ot.01\",\n          \"depends_on\": [\n            \"erp_business_applications.01\"\n          ]\n        }\n      ]\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Save the draft: parallel and sequential services (administrator)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test('Two stages; ERP and MES in parallel; OT security after ERP', function () {",
+                  "    const stages = pm.response.json().data.draft.stages;",
+                  "    pm.expect(stages.length).to.eql(2);",
+                  "    pm.expect(stages[0].items[0].parallel_with).to.eql([stages[0].items[1].item_id]);",
+                  "    pm.expect(stages[1].items[0].depends_on[0].item_id).to.eql(stages[0].items[0].item_id);",
+                  "    pm.environment.set('plan_item_erp', stages[0].items[0].item_id);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}{{api_prefix}}/transformation-plans/{{plan_id}}/draft",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "{{api_prefix}}",
+                "transformation-plans",
+                "{{plan_id}}",
+                "draft"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"based_on_revision\": 0,\n  \"title\": \"خطة التحول الرقمي\",\n  \"stages\": [\n    {\n      \"name_ar\": \"التأسيس والتجهيز\",\n      \"factory_instructions_ar\": \"جهّزوا بيانات الإنتاج.\",\n      \"internal_notes\": \"ملاحظة داخلية\",\n      \"items\": [\n        {\n          \"service\": \"erp_business_applications.01\"\n        },\n        {\n          \"service\": \"automation_ot.01\"\n        }\n      ]\n    },\n    {\n      \"name_ar\": \"التطوير والتكامل\",\n      \"items\": [\n        {\n          \"service\": \"ot_ics_cybersecurity.01\",\n          \"depends_on\": [\n            \"erp_business_applications.01\"\n          ]\n        }\n      ]\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "A stale revision is refused (409)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 409', function () {",
+                  "    pm.response.to.have.status(409);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}{{api_prefix}}/transformation-plans/{{plan_id}}/draft",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "{{api_prefix}}",
+                "transformation-plans",
+                "{{plan_id}}",
+                "draft"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"based_on_revision\": 0,\n  \"title\": \"خطة\",\n  \"stages\": []\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "The factory cannot see an unpublished plan (404)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 404', function () {",
+                  "    pm.response.to.have.status(404);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{factory_a_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}{{api_prefix}}/transformation-plans/{{plan_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "{{api_prefix}}",
+                "transformation-plans",
+                "{{plan_id}}"
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Publish the plan (administrator)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test('Published, version 1', function () { pm.expect(pm.response.json().data.status).to.eql('published'); pm.expect(pm.response.json().data.published_version.version).to.eql(1); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}{{api_prefix}}/transformation-plans/{{plan_id}}/publish",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "{{api_prefix}}",
+                "transformation-plans",
+                "{{plan_id}}",
+                "publish"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "The factory reads its plan (Factory A member)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test('The published version, without IMC notes or drafts', function () {",
+                  "    const d = pm.response.json().data;",
+                  "    pm.expect(d.published.stages.length).to.eql(2);",
+                  "    pm.expect(JSON.stringify(d)).to.not.include('ملاحظة داخلية');",
+                  "    pm.expect(d).to.not.have.any.keys('draft', 'review', 'status_reason');",
+                  "    pm.expect(d.published.stages[1].items[0].state).to.eql('waiting_prerequisites');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{factory_a_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}{{api_prefix}}/transformation-plans/{{plan_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "{{api_prefix}}",
+                "transformation-plans",
+                "{{plan_id}}"
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Request the ERP item of the plan (Factory A member)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 201', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "pm.test('Linked to the plan item', function () { pm.expect(pm.response.json().data.transformation_plan_item_id).to.eql(Number(pm.environment.get('plan_item_erp'))); });",
+                  "pm.environment.set('plan_request_id', pm.response.json().data.id);",
+                  "pm.environment.set('plan_thread_id', pm.response.json().data.provider_requests[0].id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{factory_a_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}{{api_prefix}}/service-requests",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "{{api_prefix}}",
+                "service-requests"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"service\": \"erp_business_applications.01\",\n  \"title\": \"ERP من خطة التحول\",\n  \"need\": \"تخطيط الإنتاج\",\n  \"provider_ids\": [{{provider_p_id}}],\n  \"transformation_plan_item_id\": {{plan_item_erp}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "A second live request for the item (409)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 409', function () {",
+                  "    pm.response.to.have.status(409);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{factory_a_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}{{api_prefix}}/service-requests",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "{{api_prefix}}",
+                "service-requests"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"service\": \"erp_business_applications.01\",\n  \"title\": \"ERP again\",\n  \"need\": \"again\",\n  \"provider_ids\": [{{provider_p_id}}],\n  \"transformation_plan_item_id\": {{plan_item_erp}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Start before an approved agreement (409)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 409', function () {",
+                  "    pm.response.to.have.status(409);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}{{api_prefix}}/transformation-plans/{{plan_id}}/items/{{plan_item_erp}}/start",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "{{api_prefix}}",
+                "transformation-plans",
+                "{{plan_id}}",
+                "items",
+                "{{plan_item_erp}}",
+                "start"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Provider P accepts the request",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{provider_p_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}{{api_prefix}}/provider-requests/{{plan_thread_id}}/accept",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "{{api_prefix}}",
+                "provider-requests",
+                "{{plan_thread_id}}",
+                "accept"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Provider P offers",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 201', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "pm.environment.set('plan_offer_id', pm.response.json().data.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{provider_p_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}{{api_prefix}}/provider-requests/{{plan_thread_id}}/offers",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "{{api_prefix}}",
+                "provider-requests",
+                "{{plan_thread_id}}",
+                "offers"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"based_on_version\": null,\n  \"scope\": \"ERP\",\n  \"deliverables\": \"ERP live\",\n  \"duration_days\": 60,\n  \"price\": { \"amount\": \"100000.00\", \"currency\": \"EGP\" }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Factory A accepts the offer",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{factory_a_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}{{api_prefix}}/provider-requests/{{plan_thread_id}}/offers/{{plan_offer_id}}/accept",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "{{api_prefix}}",
+                "provider-requests",
+                "{{plan_thread_id}}",
+                "offers",
+                "{{plan_offer_id}}",
+                "accept"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "The plan shows the agreement awaiting IMC (Factory A member)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test('Awaiting approval, not started', function () { const item = pm.response.json().data.published.stages[0].items[0]; pm.expect(item.state).to.eql('awaiting_approval'); pm.expect(item.execution_status).to.eql('not_started'); pm.environment.set('plan_agreement_id', item.request.agreement_id); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{factory_a_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}{{api_prefix}}/transformation-plans/{{plan_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "{{api_prefix}}",
+                "transformation-plans",
+                "{{plan_id}}"
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "IMC approves the agreement",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}{{api_prefix}}/agreements/{{plan_agreement_id}}/review",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "{{api_prefix}}",
+                "agreements",
+                "{{plan_agreement_id}}",
+                "review"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"decision\": \"approved\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "The factory cannot record execution (403)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 403', function () {",
+                  "    pm.response.to.have.status(403);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{factory_a_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}{{api_prefix}}/transformation-plans/{{plan_id}}/items/{{plan_item_erp}}/start",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "{{api_prefix}}",
+                "transformation-plans",
+                "{{plan_id}}",
+                "items",
+                "{{plan_item_erp}}",
+                "start"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "IMC records the start",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test('In progress', function () { pm.expect(pm.response.json().data.published.stages[0].items[0].execution_status).to.eql('in_progress'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}{{api_prefix}}/transformation-plans/{{plan_id}}/items/{{plan_item_erp}}/start",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "{{api_prefix}}",
+                "transformation-plans",
+                "{{plan_id}}",
+                "items",
+                "{{plan_item_erp}}",
+                "start"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"بدأ التنفيذ\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "A provider cannot see the plan (404)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 404', function () {",
+                  "    pm.response.to.have.status(404);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{provider_p_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}{{api_prefix}}/transformation-plans/{{plan_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "{{api_prefix}}",
+                "transformation-plans",
+                "{{plan_id}}"
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Version history (administrator)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test('Version 1 published', function () { pm.expect(pm.response.json().data[0].status).to.eql('published'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}{{api_prefix}}/transformation-plans/{{plan_id}}/versions",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "{{api_prefix}}",
+                "transformation-plans",
+                "{{plan_id}}",
+                "versions"
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Version history as the factory (403)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 403', function () {",
+                  "    pm.response.to.have.status(403);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{factory_a_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}{{api_prefix}}/transformation-plans/{{plan_id}}/versions",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "{{api_prefix}}",
+                "transformation-plans",
+                "{{plan_id}}",
+                "versions"
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "22 Listing Packages & Cart (ADR-027)",
+      "description": "Provider packages with monthly and annual prices and users, reviewed again by IMC on every change; the factory cart that sends one request per service, each thread keeping a copy of the choice. No payment.",
+      "item": [
+        {
+          "name": "Provider P lists ERP packages (back to review)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test('The listing is pending with two packages', function () {",
+                  "    const listing = pm.response.json().data.service_listings.filter(function (l) { return String(l.service.id) === pm.environment.get('svc_erp_id'); })[0];",
+                  "    pm.expect(listing.status).to.eql('pending');",
+                  "    pm.expect(listing.packages.length).to.eql(2);",
+                  "    pm.expect(listing.packages[0].monthly_price).to.eql('1500.00');",
+                  "    pm.expect(listing.packages[1].monthly_price).to.eql(null);",
+                  "    pm.environment.set('pkg_erp_basic', String(listing.packages[0].id));",
+                  "    pm.environment.set('pkg_erp_pro', String(listing.packages[1].id));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{provider_p_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}{{api_prefix}}/service-providers/{{provider_p_id}}/services/{{svc_erp_id}}/packages",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "{{api_prefix}}",
+                "service-providers",
+                "{{provider_p_id}}",
+                "services",
+                "{{svc_erp_id}}",
+                "packages"
+              ]
+            },
+            "description": "Expected 200. Packages carry a name and, each optional, a monthly price, an annual price and a number of users (at least one price). Changing them sends the listing back to IMC review (ADR-027).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"packages\": [\n    { \"name_ar\": \"الباقة الأساسية\", \"monthly_price\": \"1500\", \"annual_price\": \"15000\", \"users_count\": 10 },\n    { \"name_ar\": \"الباقة المتقدمة\", \"annual_price\": \"40000\", \"users_count\": 50 }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "A package without any price (422)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 422', function () {",
+                  "    pm.response.to.have.status(422);",
+                  "});",
+                  "pm.test('Asks for a price', function () { pm.expect(pm.response.json().errors).to.have.property('packages.0.monthly_price'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{provider_p_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}{{api_prefix}}/service-providers/{{provider_p_id}}/services/{{svc_erp_id}}/packages",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "{{api_prefix}}",
+                "service-providers",
+                "{{provider_p_id}}",
+                "services",
+                "{{svc_erp_id}}",
+                "packages"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"packages\": [{\"name_ar\": \"بلا سعر\", \"users_count\": 5}]}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Factory A no longer sees Provider P's ERP while it is reviewed",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test('No listing of Provider P', function () {",
+                  "    const mine = pm.response.json().data.filter(function (l) { return String(l.provider.id) === pm.environment.get('provider_p_id'); });",
+                  "    pm.expect(mine.length).to.eql(0);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{factory_a_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}{{api_prefix}}/service-listings?filter[service]=erp_business_applications.01",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "{{api_prefix}}",
+                "service-listings"
+              ],
+              "query": [
+                {
+                  "key": "filter[service]",
+                  "value": "erp_business_applications.01"
+                }
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Administrator approves the new prices",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}{{api_prefix}}/service-providers/{{provider_p_id}}/services/{{svc_erp_id}}/review",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "{{api_prefix}}",
+                "service-providers",
+                "{{provider_p_id}}",
+                "services",
+                "{{svc_erp_id}}",
+                "review"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"decision\": \"approved\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Factory A sees the packages",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test('Provider P lists two packages', function () {",
+                  "    const listing = pm.response.json().data.filter(function (l) { return String(l.provider.id) === pm.environment.get('provider_p_id'); })[0];",
+                  "    pm.expect(listing.packages.length).to.eql(2);",
+                  "    pm.expect(listing.packages[1].annual_price).to.eql('40000.00');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{factory_a_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}{{api_prefix}}/service-listings?filter[service]=erp_business_applications.01",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "{{api_prefix}}",
+                "service-listings"
+              ],
+              "query": [
+                {
+                  "key": "filter[service]",
+                  "value": "erp_business_applications.01"
+                }
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Factory A adds Provider P's ERP to the cart",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 201', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "pm.test('Chosen package, period and users, with an estimate', function () {",
+                  "    const data = pm.response.json().data;",
+                  "    pm.expect(data.items.length).to.eql(1);",
+                  "    pm.expect(data.items[0].price).to.eql('1500.00');",
+                  "    pm.expect(data.items[0].users_count).to.eql(8);",
+                  "    pm.expect(data.summary.estimated_monthly_total).to.eql('1500.00');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{factory_a_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}{{api_prefix}}/cart/items",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "{{api_prefix}}",
+                "cart",
+                "items"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"service\": \"erp_business_applications.01\", \"provider_id\": {{provider_p_id}}, \"package_id\": {{pkg_erp_basic}}, \"billing_period\": \"monthly\", \"users_count\": 8}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "A period the package has no price for (422)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 422', function () {",
+                  "    pm.response.to.have.status(422);",
+                  "});",
+                  "pm.test('Error on billing_period', function () { pm.expect(pm.response.json().errors).to.have.property('billing_period'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{factory_a_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}{{api_prefix}}/cart/items",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "{{api_prefix}}",
+                "cart",
+                "items"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"service\": \"erp_business_applications.01\", \"provider_id\": {{provider_p_id}}, \"package_id\": {{pkg_erp_pro}}, \"billing_period\": \"monthly\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "A provider has no cart (403)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 403', function () {",
+                  "    pm.response.to.have.status(403);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{provider_p_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}{{api_prefix}}/cart",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "{{api_prefix}}",
+                "cart"
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Factory A sends the cart",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 201', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "pm.test('One request for ERP, the thread keeps the choice', function () {",
+                  "    const data = pm.response.json().data;",
+                  "    pm.expect(data.length).to.eql(1);",
+                  "    const thread = data[0].provider_requests[0];",
+                  "    pm.expect(thread.selection.package.name_ar).to.eql('الباقة الأساسية');",
+                  "    pm.expect(thread.selection.billing_period).to.eql('monthly');",
+                  "    pm.environment.set('cart_thread_id', String(thread.id));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{factory_a_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}{{api_prefix}}/cart/checkout",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "{{api_prefix}}",
+                "cart",
+                "checkout"
+              ]
+            },
+            "description": "Expected 201: one service request per service in the payload, sent to every provider in the cart for it. Nothing is paid; the totals were estimates (ADR-027, OQ-57).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"requests\": [{\"service\": \"erp_business_applications.01\", \"title\": \"نظام ERP من السلة\", \"need\": \"نحتاج نظام ERP لثمانية مستخدمين.\"}]}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Provider P sees the factory's choice",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test('Selection as listed when sent', function () {",
+                  "    const selection = pm.response.json().data.selection;",
+                  "    pm.expect(selection.package.monthly_price).to.eql('1500.00');",
+                  "    pm.expect(selection.users_count).to.eql(8);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{provider_p_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}{{api_prefix}}/provider-requests/{{cart_thread_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "{{api_prefix}}",
+                "provider-requests",
+                "{{cart_thread_id}}"
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "The cart is empty after sending",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test('No items left', function () { pm.expect(pm.response.json().data.items.length).to.eql(0); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{factory_a_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}{{api_prefix}}/cart",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "{{api_prefix}}",
+                "cart"
               ]
             },
             "description": ""

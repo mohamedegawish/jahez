@@ -11,7 +11,8 @@ use Illuminate\Http\Resources\Json\JsonResource;
  * A digital readiness category (ADR-018): its source names, description and total-score
  * range and, when recommendations.services.category is loaded, the source roadmap (focus,
  * steps and the recommended service lines with the catalog services they correspond to).
- * A line with no services is one the catalog does not offer (OQ-42).
+ * A line with no services is one the catalog does not offer (OQ-42). The score range goes
+ * to IMC administrators only (ADR-026).
  *
  * @mixin ReadinessCategory
  */
@@ -29,8 +30,10 @@ class ReadinessCategoryResource extends JsonResource
             'name_en' => $this->name_en,
             'name_ar' => $this->name_ar,
             'description_ar' => $this->description_ar,
-            'min_score' => $this->min_score,
-            'max_score' => $this->max_score,
+            ...(ReadinessAssessmentResource::showsScores($request) ? [
+                'min_score' => $this->min_score,
+                'max_score' => $this->max_score,
+            ] : []),
             'roadmap' => $this->whenLoaded('recommendations', fn (): array => [
                 'focus_ar' => $this->focus_ar,
                 'steps_ar' => $this->steps_ar,

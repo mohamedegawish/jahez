@@ -48,11 +48,15 @@ import { DigitalReadinessAssessment } from './pages/factory/DigitalReadinessAsse
 import { ServiceCatalog } from './pages/factory/ServiceCatalog';
 import { ServiceDetails } from './pages/factory/ServiceDetails';
 import { ProviderDirectory } from './pages/factory/ProviderDirectory';
+import { FactoryRoadmap } from './pages/factory/FactoryRoadmap';
+import { TransformationPlans } from './pages/admin/TransformationPlans';
+import { TransformationPlanDetail } from './pages/admin/TransformationPlanDetail';
 import { FactoryRequests } from './pages/factory/FactoryRequests';
 import { FactoryRequestDetail } from './pages/factory/FactoryRequestDetail';
 import { FactoryContracts } from './pages/factory/FactoryContracts';
 import { FactoryInvoices } from './pages/factory/FactoryInvoices';
 import { FactoryServices } from './pages/factory/FactoryServices';
+import { FactoryCart } from './pages/factory/FactoryCart';
 import { FactorySettings } from './pages/factory/FactorySettings';
 import { NotificationsPage } from './pages/NotificationsPage';
 
@@ -108,6 +112,8 @@ export const App: React.FC = () => {
             <Route path="/admin/users" element={<UsersRoles />} />
             <Route path="/admin/audit-logs" element={<AuditLogs />} />
             <Route path="/admin/readiness" element={<ReadinessAdministration />} />
+            <Route path="/admin/roadmaps" element={<TransformationPlans />} />
+            <Route path="/admin/roadmaps/:id" element={<TransformationPlanDetail />} />
             </Route>
 
             {/* Provider Routes (provider_member) */}
@@ -131,8 +137,10 @@ export const App: React.FC = () => {
             <Route path="/factory/profile" element={<Navigate to="/factory/settings" replace />} />
             <Route path="/factory/settings" element={<FactorySettings />} />
             <Route path="/factory/services" element={<FactoryServices />} />
+            <Route path="/factory/cart" element={<FactoryCart />} />
             <Route path="/factory/contracts/:id" element={<FactoryContracts />} />
             <Route path="/factory/assessment" element={<DigitalReadinessAssessment />} />
+            <Route path="/factory/roadmap" element={<FactoryRoadmap />} />
             <Route path="/factory/catalog" element={<ServiceCatalog />} />
             <Route path="/factory/services/:id" element={<ServiceDetails />} />
             <Route path="/factory/providers" element={<ProviderDirectory />} />

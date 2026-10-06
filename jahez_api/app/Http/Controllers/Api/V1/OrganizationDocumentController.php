@@ -13,6 +13,7 @@ use App\Models\Factory;
 use App\Models\OrganizationDocument;
 use App\Models\ServiceProvider;
 use App\Models\User;
+use App\Readiness\ServiceEligibility;
 use Illuminate\Container\Attributes\CurrentUser;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\UploadedFile;
@@ -88,7 +89,7 @@ class OrganizationDocumentController extends Controller
     {
         Gate::authorize('viewDirectory', ServiceProvider::class);
 
-        $provider = ProviderDirectoryController::visibleTo($user)->whereKey($serviceProvider)->firstOrFail();
+        $provider = app(ServiceEligibility::class)->directoryProvidersFor($user->industrialFactory)->whereKey($serviceProvider)->firstOrFail();
 
         return $provider->activeDocuments()->where('type', DocumentType::Logo)->firstOrFail()->toResponse();
     }

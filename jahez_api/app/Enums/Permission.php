@@ -21,6 +21,9 @@ enum Permission: string
     case ServiceListingsReview = 'service_listings.review';
     case AssessmentsViewAny = 'assessments.view_any';
     case ReadinessQuestionnairesManage = 'readiness_questionnaires.manage';
+    case ReadinessServicesManage = 'readiness_services.manage';
+    case TransformationPlansViewAny = 'transformation_plans.view_any';
+    case TransformationPlansManage = 'transformation_plans.manage';
     case ServiceRequestsViewAny = 'service_requests.view_any';
     case AgreementsViewAny = 'agreements.view_any';
     case AgreementsReview = 'agreements.review';
