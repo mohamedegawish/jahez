@@ -1,0 +1,162 @@
+# Jahez — local dev (`docker compose up --build`) and Coolify (Build Pack: Docker Compose).
+#
+# LOCAL:  copy .env.compose.example to .env, set APP_KEY + passwords, then:
+#         docker compose up --build
+#         front -> http://localhost:3000 | api -> http://localhost:8000/up
+#
+# COOLIFY: push this repo to GitHub, create 1 resource (Docker Compose),
+#         set the env vars below in Coolify's Environment Variables UI,
+#         set VITE_API_BASE_URL as a *build* variable, add 2 domains (api + front).
+
+name: jahez
+
+services:
+  db:
+    image: mysql:8.0
+    command: >
+      --default-authentication-plugin=mysql_native_password
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_unicode_ci
+    environment:
+      MYSQL_DATABASE: ${DB_DATABASE:-jahez}
+      MYSQL_USER: ${DB_USERNAME:-jahez}
+      MYSQL_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env or Coolify}
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:?Set DB_ROOT_PASSWORD in .env or Coolify}
+    volumes:
+      - db_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${DB_ROOT_PASSWORD}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    restart: unless-stopped
+
+  api:
+    build: ./jahez_api
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      APP_NAME: ${APP_NAME:-Jahez}
+      APP_ENV: ${APP_ENV:-production}
+      APP_DEBUG: ${APP_DEBUG:-false}
+      APP_KEY: ${APP_KEY:?Generate with `php artisan key:generate --show` and set it here}
+      APP_URL: ${APP_URL:-http://localhost:8000}
+      LOG_CHANNEL: stderr
+      LOG_LEVEL: ${LOG_LEVEL:-warning}
+      DB_CONNECTION: mysql
+      DB_HOST: db
+      DB_PORT: 3306
+      DB_DATABASE: ${DB_DATABASE:-jahez}
+      DB_USERNAME: ${DB_USERNAME:-jahez}
+      DB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env or Coolify}
+      SESSION_DRIVER: array
+      CACHE_STORE: database
+      QUEUE_CONNECTION: database
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:3000}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
+      TRUSTED_PROXIES: "*"
+      API_RATE_LIMIT_PER_MINUTE: ${API_RATE_LIMIT_PER_MINUTE:-60}
+      SANCTUM_EXPIRATION: ${SANCTUM_EXPIRATION:-480}
+      MAIL_MAILER: ${MAIL_MAILER:-log}
+      MAIL_SCHEME: ${MAIL_SCHEME:-null}
+      MAIL_HOST: ${MAIL_HOST:-127.0.0.1}
+      MAIL_PORT: ${MAIL_PORT:-2525}
+      MAIL_USERNAME: ${MAIL_USERNAME:-null}
+      MAIL_PASSWORD: ${MAIL_PASSWORD:-null}
+      MAIL_FROM_ADDRESS: ${MAIL_FROM_ADDRESS:-hello@example.com}
+      MAIL_FROM_NAME: ${MAIL_FROM_NAME:-Jahez}
+    volumes:
+      - storage_data:/var/www/html/storage
+    ports:
+      - "8000:80"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/up"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+    restart: unless-stopped
+
+  # Runs queued jobs (mail, notifications). Required because QUEUE_CONNECTION=database.
+  worker:
+    build: ./jahez_api
+    command: ["queue"]
+    depends_on:
+      db:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+    environment:
+      APP_NAME: ${APP_NAME:-Jahez}
+      APP_ENV: ${APP_ENV:-production}
+      APP_DEBUG: ${APP_DEBUG:-false}
+      APP_KEY: ${APP_KEY:?Generate with `php artisan key:generate --show` and set it here}
+      APP_URL: ${APP_URL:-http://localhost:8000}
+      LOG_CHANNEL: stderr
+      LOG_LEVEL: ${LOG_LEVEL:-warning}
+      DB_CONNECTION: mysql
+      DB_HOST: db
+      DB_PORT: 3306
+      DB_DATABASE: ${DB_DATABASE:-jahez}
+      DB_USERNAME: ${DB_USERNAME:-jahez}
+      DB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env or Coolify}
+      CACHE_STORE: database
+      QUEUE_CONNECTION: database
+      MAIL_MAILER: ${MAIL_MAILER:-log}
+      MAIL_SCHEME: ${MAIL_SCHEME:-null}
+      MAIL_HOST: ${MAIL_HOST:-127.0.0.1}
+      MAIL_PORT: ${MAIL_PORT:-2525}
+      MAIL_USERNAME: ${MAIL_USERNAME:-null}
+      MAIL_PASSWORD: ${MAIL_PASSWORD:-null}
+      MAIL_FROM_ADDRESS: ${MAIL_FROM_ADDRESS:-hello@example.com}
+      MAIL_FROM_NAME: ${MAIL_FROM_NAME:-Jahez}
+    volumes:
+      - storage_data:/var/www/html/storage
+    restart: unless-stopped
+
+  # Runs the Laravel scheduler (sanctum:prune-expired, payments:reconcile).
+  scheduler:
+    build: ./jahez_api
+    command: ["scheduler"]
+    depends_on:
+      db:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+    environment:
+      APP_NAME: ${APP_NAME:-Jahez}
+      APP_ENV: ${APP_ENV:-production}
+      APP_DEBUG: ${APP_DEBUG:-false}
+      APP_KEY: ${APP_KEY:?Generate with `php artisan key:generate --show` and set it here}
+      APP_URL: ${APP_URL:-http://localhost:8000}
+      LOG_CHANNEL: stderr
+      LOG_LEVEL: ${LOG_LEVEL:-warning}
+      DB_CONNECTION: mysql
+      DB_HOST: db
+      DB_PORT: 3306
+      DB_DATABASE: ${DB_DATABASE:-jahez}
+      DB_USERNAME: ${DB_USERNAME:-jahez}
+      DB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env or Coolify}
+      CACHE_STORE: database
+      QUEUE_CONNECTION: database
+    volumes:
+      - storage_data:/var/www/html/storage
+    restart: unless-stopped
+
+  front:
+    build:
+      context: ./front
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8000/api/v1}
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "3000:80"
+    restart: unless-stopped
+
+volumes:
+  db_data:
+  storage_data:

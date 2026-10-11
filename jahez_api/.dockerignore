@@ -1,0 +1,17 @@
+.git
+.gitignore
+.env
+.env.backup
+.env.production
+vendor/
+node_modules/
+storage/app/public/*
+storage/framework/cache/*
+storage/framework/sessions/*
+storage/framework/views/*
+storage/logs/*
+bootstrap/cache/*.php
+tests/
+.dockerignore
+Dockerfile
+docker-compose*.yml
