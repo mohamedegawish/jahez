@@ -1,12 +1,15 @@
-# Jahez — local dev (`docker compose up --build`) and Coolify (Build Pack: Docker Compose).
+# Jahez — local dev and Coolify (Build Pack: Docker Compose).
 #
 # LOCAL:  copy .env.compose.example to .env, set APP_KEY + passwords, then:
-#         docker compose up --build
+#         docker compose -f docker-compose.yml -f docker-compose.local.yml up --build
 #         front -> http://localhost:3000 | api -> http://localhost:8000/up
 #
 # COOLIFY: push this repo to GitHub, create 1 resource (Docker Compose),
 #         set the env vars below in Coolify's Environment Variables UI,
 #         set VITE_API_BASE_URL as a *build* variable, add 2 domains (api + front).
+#         NOTE: no `ports:` are published here on purpose — Coolify routes traffic
+#         to each service by domain through its own proxy. The local-only port
+#         mappings live in docker-compose.local.yml (Coolify ignores that file).
 
 name: jahez
 
@@ -69,8 +72,8 @@ services:
       MAIL_FROM_NAME: ${MAIL_FROM_NAME:-Jahez}
     volumes:
       - storage_data:/var/www/html/storage
-    ports:
-      - "8000:80"
+    expose:
+      - "80"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost/up"]
       interval: 15s
@@ -153,8 +156,8 @@ services:
     depends_on:
       api:
         condition: service_healthy
-    ports:
-      - "3000:80"
+    expose:
+      - "80"
     restart: unless-stopped
 
 volumes:
