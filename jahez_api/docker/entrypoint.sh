@@ -3,6 +3,9 @@ set -e
 
 # Wait for MySQL to accept connections (max ~60s), then migrate.
 # Uses DB_* env vars injected by docker-compose / Coolify.
+# NOTE: a wrong password (MySQL error 1045) fails FAST with a clear message —
+# retrying would never help because the db volume keeps the credentials that
+# were set on the very first deploy.
 if [ -n "$DB_HOST" ]; then
   echo "Waiting for database $DB_HOST:${DB_PORT:-3306}..."
   ATTEMPTS=0
@@ -14,8 +17,21 @@ if [ -n "$DB_HOST" ]; then
         getenv('DB_PASSWORD') ?: ''
       );
       exit(0);
+    } catch (PDOException \$e) {
+      \$driverCode = is_array(\$e->errorInfo) ? (\$e->errorInfo[1] ?? null) : null;
+      if ((int) \$driverCode === 1045 || str_contains(\$e->getMessage(), 'Access denied')) {
+        fwrite(STDERR, 'DB_AUTH_FAILED');
+        exit(2);
+      }
+      exit(1);
     } catch (Throwable \$e) { exit(1); }
   "; do
+    if [ "$?" -eq 2 ]; then
+      echo "ERROR: Access denied for user '${DB_USERNAME}' on host '${DB_HOST}'."
+      echo "The db volume keeps the MySQL password from the FIRST deploy; changing DB_PASSWORD afterwards does not update it."
+      echo "Fix: stop the stack, remove the db volume (docker volume rm <project>_db_data), then redeploy."
+      exit 1
+    fi
     ATTEMPTS=$((ATTEMPTS + 1))
     if [ "$ATTEMPTS" -ge 60 ]; then
       echo "Database not reachable after 60s, continuing anyway..."
