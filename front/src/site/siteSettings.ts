@@ -1,4 +1,5 @@
 import type { SiteSettingsMap, SiteSettingsPayload } from '../api/types';
+import { SITE_DEFAULTS } from './siteDefaults.ts';
 
 /** Display language of the settings-driven landing content. The portal chrome stays Arabic. */
 export type SiteLang = 'ar' | 'en';
@@ -137,7 +138,7 @@ export function labelFor(key: string): string {
 
 /**
  * The displayed text: the saved value in the current language, else the
- * component's built-in copy (an empty saved value also falls back).
+ * built-in copy, else the caller's fallback.
  */
 export function resolveSetting(
   map: SiteSettingsMap | undefined,
@@ -146,7 +147,19 @@ export function resolveSetting(
   fallback: string,
 ): string {
   const saved = map?.[key]?.[lang];
-  return saved == null || saved === '' ? fallback : saved;
+  if (saved != null && saved !== '') return saved;
+  const builtIn = defaultText(key, lang);
+  return builtIn !== '' ? builtIn : fallback;
+}
+
+/**
+ * The built-in copy of a key in a language ('' when the key is unknown).
+ * The admin form pre-fills inputs with this when nothing is saved yet.
+ */
+export function defaultText(key: string, lang: SiteLang): string {
+  const entry = SITE_DEFAULTS[key];
+  if (!entry) return '';
+  return lang === 'en' ? (entry.en ?? entry.ar) : entry.ar;
 }
 
 /** Absolute URL of the uploaded brand logo, or null until one is uploaded. */

@@ -47,10 +47,8 @@ export const SiteSettingsProvider: React.FC<{ children: React.ReactNode }> = ({ 
     return () => controller.abort();
   }, []);
 
-  const t = useMemo(
-    () => (key: string, fallback: string) => resolveSetting(map, key, lang, fallback),
-    [map, lang],
-  );
+  // resolveSetting falls back to the built-in copy, then to the caller's fallback.
+  const t = useMemo(() => (key: string, fallback = '') => resolveSetting(map, key, lang, fallback), [map, lang]);
 
   const value = useMemo(() => ({ map, lang, setLang, t }), [map, lang, t]);
   return <SiteSettingsContext.Provider value={value}>{children}</SiteSettingsContext.Provider>;

@@ -14,6 +14,7 @@ import {
   SECTION_ORDER,
   SECTION_TITLES,
   buildSiteSettingsPayload,
+  defaultText,
   labelFor,
 } from '../../site/siteSettings';
 
@@ -23,7 +24,10 @@ function toDraft(settings: AdminSiteSetting[]): Draft {
   const next: Draft = {};
   for (const setting of settings) {
     if (setting.type === 'image') continue;
-    next[setting.key] = { ar: setting.ar ?? '', en: setting.en ?? '' };
+    next[setting.key] = {
+      ar: setting.ar ?? defaultText(setting.key, 'ar'),
+      en: setting.en ?? defaultText(setting.key, 'en'),
+    };
   }
   return next;
 }
@@ -42,7 +46,7 @@ export const SiteSettings: React.FC = () => {
         <div>
           <h2 className="text-xl sm:text-2xl font-bold text-[#172033] tracking-tight">محتوى الصفحة الرئيسية</h2>
           <p className="text-xs sm:text-sm text-[#667085] mt-0.5">
-            كل نصوص الصفحة الرئيسية بالعربية والإنجليزية، والشعار. الحقل الفارغ يعرض النص الأصلي.
+            كل نصوص الصفحة الرئيسية بالعربية والإنجليزية، والشعار. الحقول معبأة بالنصوص الحالية — عدّل ما تشاء ثم احفظ.
           </p>
         </div>
       </div>
@@ -174,7 +178,7 @@ const SettingsForm: React.FC<{ settings: AdminSiteSetting[]; onChanged: () => vo
                             maxLength={setting.max ?? undefined}
                             rows={3}
                             onChange={(event) => setValue(setting.key, lang, event.target.value)}
-                            placeholder={lang === 'ar' ? 'يُعرض النص الأصلي عند الترك فارغًا' : 'Falls back to the built-in copy when empty'}
+                            placeholder={lang === 'ar' ? 'امسحه للرجوع للنص الأصلي' : 'Clear to restore the built-in copy'}
                             className="w-full rounded-xl border border-[#E6EAF0] bg-white px-3 py-2 text-xs text-[#172033] placeholder:text-[#98A2B3] focus:outline-none focus:ring-2 focus:ring-[#5146A5]/30 focus:border-[#5146A5]"
                           />
                         ) : (
@@ -182,7 +186,7 @@ const SettingsForm: React.FC<{ settings: AdminSiteSetting[]; onChanged: () => vo
                             value={value[lang]}
                             maxLength={setting.max ?? undefined}
                             onChange={(event) => setValue(setting.key, lang, event.target.value)}
-                            placeholder={lang === 'ar' ? 'يُعرض النص الأصلي عند الترك فارغًا' : 'Falls back to the built-in copy when empty'}
+                            placeholder={lang === 'ar' ? 'امسحه للرجوع للنص الأصلي' : 'Clear to restore the built-in copy'}
                             className="w-full rounded-xl border border-[#E6EAF0] bg-white px-3 py-2 text-xs text-[#172033] placeholder:text-[#98A2B3] focus:outline-none focus:ring-2 focus:ring-[#5146A5]/30 focus:border-[#5146A5]"
                           />
                         )}

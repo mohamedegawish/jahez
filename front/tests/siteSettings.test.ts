@@ -4,12 +4,16 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import {
   buildSiteSettingsPayload,
+  defaultText,
   labelFor,
   logoSrc,
   resolveSetting,
 } from '../src/site/siteSettings.ts';
+import { SITE_DEFAULTS } from '../src/site/siteDefaults.ts';
 import type { SiteSettingsMap } from '../src/api/types.ts';
 
 const map: SiteSettingsMap = {
@@ -24,15 +28,16 @@ test('resolveSetting prefers the saved value in the current language', () => {
   assert.equal(resolveSetting(map, 'hero.title_ar', 'en', 'Fallback'), 'Saved English');
 });
 
-test('resolveSetting falls back when nothing is saved', () => {
-  assert.equal(resolveSetting(map, 'hero.kicker', 'ar', 'Fallback'), 'Fallback');
-  assert.equal(resolveSetting(map, 'hero.kicker', 'en', 'Fallback'), 'Fallback');
+test('resolveSetting falls back to the built-in copy, then to the caller fallback', () => {
+  assert.equal(resolveSetting(map, 'hero.kicker', 'ar', 'Fallback'), SITE_DEFAULTS['hero.kicker'].ar);
+  assert.equal(resolveSetting(map, 'hero.kicker', 'en', 'Fallback'), SITE_DEFAULTS['hero.kicker'].ar);
   assert.equal(resolveSetting(map, 'missing.key', 'ar', 'Fallback'), 'Fallback');
-  assert.equal(resolveSetting(undefined, 'hero.title_ar', 'ar', 'Fallback'), 'Fallback');
+  assert.equal(resolveSetting(undefined, 'missing.key', 'ar', 'Fallback'), 'Fallback');
+  assert.equal(resolveSetting(undefined, 'missing.key', 'ar', ''), '');
 });
 
 test('resolveSetting treats an empty saved value as missing', () => {
-  assert.equal(resolveSetting(map, 'hero.cta_login', 'ar', 'Fallback'), 'Fallback');
+  assert.equal(resolveSetting(map, 'hero.cta_login', 'ar', 'Fallback'), SITE_DEFAULTS['hero.cta_login'].ar);
 });
 
 test('buildSiteSettingsPayload nests by section and nulls empty strings', () => {
@@ -92,4 +97,39 @@ test('logoSrc is null until a logo is uploaded', () => {
   assert.equal(logoSrc({}, 'https://api.test'), null);
   const src = logoSrc(map, 'https://api.test');
   assert.equal(src, 'https://api.test/public/site-settings/logo?v=123');
+});
+
+test('SITE_DEFAULTS covers every text key with a non-empty Arabic copy', () => {
+  const keys = Object.keys(SITE_DEFAULTS);
+  assert.ok(keys.length >= 90, `expected the full landing copy, found ${keys.length} keys`);
+  for (const key of keys) {
+    if (key === 'brand.logo') continue;
+    assert.ok(/^(brand|header|footer|hero|join|value|categories|about|services|steps)\./.test(key), `bad key ${key}`);
+    assert.ok(SITE_DEFAULTS[key].ar.length > 0, `empty Arabic copy for ${key}`);
+  }
+  assert.equal(defaultText('hero.title_ar', 'ar'), SITE_DEFAULTS['hero.title_ar'].ar);
+  assert.equal(defaultText('unknown.key', 'ar'), '');
+});
+
+test("component fallbacks never drift from SITE_DEFAULTS (edit the copy in siteDefaults.ts only)", () => {
+  const SRC = join(import.meta.dirname, '..', 'src');
+  const files = [
+    'pages/home/LandingHome.tsx',
+    'components/hero/HeroSection.tsx',
+    'components/layout/PublicHeader.tsx',
+    'components/layout/Sidebar.tsx',
+    'layouts/PublicLayout.tsx',
+  ].map((name) => readFileSync(join(SRC, name), 'utf8'));
+  const pattern = /t\(\s*'([^']+)'\s*,\s*'((?:[^'\\]|\\.)*)'\s*\)/g;
+  let found = 0;
+  for (const text of files) {
+    pattern.lastIndex = 0;
+    let match: RegExpExecArray | null;
+    while ((match = pattern.exec(text)) !== null) {
+      found += 1;
+      const [, key, literal] = match;
+      assert.equal(SITE_DEFAULTS[key]?.ar, literal, `fallback drift for ${key}: edit siteDefaults.ts instead`);
+    }
+  }
+  assert.ok(found > 40, `expected dozens of static fallbacks, found ${found}`);
 });
