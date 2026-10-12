@@ -13,11 +13,13 @@ import {
 import { JahezShaderCanvas } from './JahezShaderCanvas';
 import { Button } from '../ui/Button';
 import { useAuth } from '../../auth/authContext';
+import { useSiteSettings } from '../../site/siteSettingsContext';
 import type { Role } from '../../api';
 
 export const HeroSection: React.FC = () => {
   const navigate = useNavigate();
   const { user, status } = useAuth();
+  const { t } = useSiteSettings();
   // While a stored session is being verified the viewer is neither visitor nor user: show neither set.
   const resolving = status === 'loading';
   const isVisitor = !user && !resolving;
@@ -34,38 +36,38 @@ export const HeroSection: React.FC = () => {
       <div className="max-w-6xl mx-auto text-center space-y-4 relative z-10">
         {/* Subtle pill tag */}
         <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/85 backdrop-blur-md border border-[#E6EAF0] text-xs font-bold text-[#5146A5] shadow-xs">
-          <span>المنظومة الوطنية الذكية للثورة الصناعية الرابعة | Industry 4.0</span>
+          <span>{t('hero.kicker', 'المنظومة الوطنية الذكية للثورة الصناعية الرابعة | Industry 4.0')}</span>
         </div>
 
         {/* Hero Title: JAHEZ and under it جاهز */}
         <div className="space-y-1">
           <h1 className="text-5xl sm:text-6xl lg:text-7xl font-black tracking-tight text-[#172033] font-sans drop-shadow-xs">
-            JAHEZ
+            {t('hero.title_latin', 'JAHEZ')}
           </h1>
           <div className="text-3xl sm:text-4xl lg:text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-[#5146A5] via-[#43388E] to-[#6EC8FF] tracking-wide">
-            جاهز
+            {t('hero.title_ar', 'جاهز')}
           </div>
         </div>
 
         {/* Subtitle */}
         <p className="text-sm sm:text-base lg:text-lg text-[#344054] max-w-2xl mx-auto font-medium leading-relaxed">
-          المنصة الوطنية لربط المنشآت الصناعية بمزودي حلول الأتمتة والذكاء الاصطناعي، 
-          بإشراف وحوكمة معتمدة من <strong className="text-[#5146A5]">مركز تحديث الصناعة (IMC)</strong>.
+          {t('hero.subtitle', 'المنصة الوطنية لربط المنشآت الصناعية بمزودي حلول الأتمتة والذكاء الاصطناعي، بإشراف وحوكمة معتمدة من ')}
+          <strong className="text-[#5146A5]">{t('hero.subtitle_authority', 'مركز تحديث الصناعة (IMC)')}</strong>.
         </p>
 
         {/* Condensed platform facts strip */}
         <div className="flex flex-wrap items-center justify-center gap-2.5 pt-1">
           {[
-            { icon: ShieldCheck, label: 'حوكمة IMC المعتمدة', color: 'text-[#1D7E4C]' },
-            { icon: Layers, label: 'كتالوج معتمد في 7 تصنيفات', color: 'text-[#0A6EB0]' },
-            { icon: FileCheck, label: 'تقييم الجاهزية الرقمية للمصنع', color: 'text-[#5146A5]' },
+            { icon: ShieldCheck, key: 'hero.fact1', fallback: 'حوكمة IMC المعتمدة', color: 'text-[#1D7E4C]' },
+            { icon: Layers, key: 'hero.fact2', fallback: 'كتالوج معتمد في 7 تصنيفات', color: 'text-[#0A6EB0]' },
+            { icon: FileCheck, key: 'hero.fact3', fallback: 'تقييم الجاهزية الرقمية للمصنع', color: 'text-[#5146A5]' },
           ].map((fact, i) => (
             <span
               key={i}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/85 backdrop-blur-md border border-[#E6EAF0] text-[11px] font-bold text-[#344054] shadow-xs"
             >
               <fact.icon className={`w-3.5 h-3.5 ${fact.color}`} />
-              {fact.label}
+              {t(fact.key, fact.fallback)}
             </span>
           ))}
         </div>
@@ -83,9 +85,9 @@ export const HeroSection: React.FC = () => {
               </div>
               <ArrowLeft className="w-4 h-4 text-[#98A2B3] group-hover:text-[#5146A5] group-hover:-translate-x-1 transition-all" />
             </div>
-            <h4 className="font-bold text-sm text-[#172033] group-hover:text-[#5146A5] transition-colors">بوابة المنشآت والمصانع</h4>
+            <h4 className="font-bold text-sm text-[#172033] group-hover:text-[#5146A5] transition-colors">{t('hero.portal_factory_title', 'بوابة المنشآت والمصانع')}</h4>
             <p className="text-[11px] text-[#667085] mt-1 leading-relaxed">
-              تقييم الجدارة الرقمية، اكتشاف الحلول، وطلب خدمات التحول الذكي.
+              {t('hero.portal_factory_desc', 'تقييم الجدارة الرقمية، اكتشاف الحلول، وطلب خدمات التحول الذكي.')}
             </p>
           </div>}
 
@@ -100,9 +102,9 @@ export const HeroSection: React.FC = () => {
               </div>
               <ArrowLeft className="w-4 h-4 text-[#98A2B3] group-hover:text-[#5146A5] group-hover:-translate-x-1 transition-all" />
             </div>
-            <h4 className="font-bold text-sm text-[#172033] group-hover:text-[#5146A5] transition-colors">بوابة مزودي الخدمات</h4>
+            <h4 className="font-bold text-sm text-[#172033] group-hover:text-[#5146A5] transition-colors">{t('hero.portal_provider_title', 'بوابة مزودي الخدمات')}</h4>
             <p className="text-[11px] text-[#667085] mt-1 leading-relaxed">
-              طرح الحلول الصناعية، استقبال طلبات المصانع، ومساحة التفاوض.
+              {t('hero.portal_provider_desc', 'طرح الحلول الصناعية، استقبال طلبات المصانع، ومساحة التفاوض.')}
             </p>
           </div>}
 
@@ -117,9 +119,9 @@ export const HeroSection: React.FC = () => {
               </div>
               <ArrowLeft className="w-4 h-4 text-[#98A2B3] group-hover:text-[#5146A5] group-hover:-translate-x-1 transition-all" />
             </div>
-            <h4 className="font-bold text-sm text-[#172033] group-hover:text-[#5146A5] transition-colors">إدارة وحوكمة المنظومة (IMC)</h4>
+            <h4 className="font-bold text-sm text-[#172033] group-hover:text-[#5146A5] transition-colors">{t('hero.portal_admin_title', 'إدارة وحوكمة المنظومة (IMC)')}</h4>
             <p className="text-[11px] text-[#667085] mt-1 leading-relaxed">
-              اعتماد المزودين بالمعايير الخمسة، توثيق العقود، والرقابة المالية.
+              {t('hero.portal_admin_desc', 'اعتماد المزودين بالمعايير الخمسة، توثيق العقود، والرقابة المالية.')}
             </p>
           </div>}
 
@@ -130,9 +132,9 @@ export const HeroSection: React.FC = () => {
                 <UserPlus className="w-5 h-5" />
               </div>
             </div>
-            <h4 className="font-bold text-sm text-[#172033] group-hover:text-[#5146A5] transition-colors">التسجيل والانضمام</h4>
+            <h4 className="font-bold text-sm text-[#172033] group-hover:text-[#5146A5] transition-colors">{t('hero.portal_join_title', 'التسجيل والانضمام')}</h4>
             <p className="text-[11px] text-[#667085] mt-1 leading-relaxed">
-              اشترك في المنصة كمنشأة صناعية أو كمزود خدمة معتمد.
+              {t('hero.portal_join_desc', 'اشترك في المنصة كمنشأة صناعية أو كمزود خدمة معتمد.')}
             </p>
             <div className="flex gap-2 mt-2.5">
               <button
@@ -140,14 +142,14 @@ export const HeroSection: React.FC = () => {
                 onClick={() => navigate('/register/factory')}
                 className="flex-1 py-1.5 rounded-lg bg-[#DFF3FF] text-[#0A6EB0] text-[11px] font-bold hover:bg-[#6EC8FF] hover:text-white transition-colors cursor-pointer"
               >
-                تسجيل منشأة
+                {t('hero.join_factory_button', 'تسجيل منشأة')}
               </button>
               <button
                 type="button"
                 onClick={() => navigate('/register/provider')}
                 className="flex-1 py-1.5 rounded-lg bg-[#EEEAFE] text-[#5146A5] text-[11px] font-bold hover:bg-[#9B8AFB] hover:text-white transition-colors cursor-pointer"
               >
-                تسجيل مزود
+                {t('hero.join_provider_button', 'تسجيل مزود')}
               </button>
             </div>
           </div>}
@@ -162,7 +164,7 @@ export const HeroSection: React.FC = () => {
             onClick={() => navigate('/factory/catalog')}
             className="font-bold shadow-md shadow-[#5146A5]/25"
           >
-            تصفح كتالوج وسوق الخدمات
+            {t('hero.cta_catalog', 'تصفح كتالوج وسوق الخدمات')}
           </Button>
 
           <Button
@@ -171,7 +173,7 @@ export const HeroSection: React.FC = () => {
             onClick={() => navigate('/factory/assessment')}
             className="bg-white/90 backdrop-blur-xs font-bold text-[#5146A5] hover:bg-white"
           >
-            بدء تقييم الجدارة الرقمية للمصنع
+            {t('hero.cta_assessment', 'بدء تقييم الجدارة الرقمية للمصنع')}
           </Button>
 
           {isVisitor && (
@@ -181,7 +183,7 @@ export const HeroSection: React.FC = () => {
               onClick={() => navigate('/login')}
               className="font-bold"
             >
-              تسجيل الدخول
+              {t('hero.cta_login', 'تسجيل الدخول')}
             </Button>
           )}
         </div>

@@ -16,6 +16,7 @@ class DatabaseSeeder extends Seeder
     public function run(): void
     {
         $this->call(ReferenceDataSeeder::class);
+        $this->call(SiteSettingSeeder::class);
 
         // Synthetic logins for local development only; never created in other environments
         // because their passwords are publicly known.

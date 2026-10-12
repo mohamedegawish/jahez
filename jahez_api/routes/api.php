@@ -52,6 +52,7 @@ use App\Http\Controllers\Api\V1\ServiceProviderApprovalController;
 use App\Http\Controllers\Api\V1\ServiceProviderController;
 use App\Http\Controllers\Api\V1\ServiceProviderReviewRequestController;
 use App\Http\Controllers\Api\V1\ServiceRequestController;
+use App\Http\Controllers\Api\V1\SiteSettingController;
 use App\Http\Controllers\Api\V1\TransformationPlanController;
 use App\Http\Controllers\Api\V1\TransformationPlanItemController;
 use App\Http\Controllers\Api\V1\TransformationPlanVersionController;
@@ -102,6 +103,9 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
         Route::get('announcements/{publicAnnouncement}/cover', [PublicAnnouncementController::class, 'publicCover'])
             ->whereNumber('publicAnnouncement')
             ->name('announcements.cover');
+        // Landing-page content (texts and the brand logo): the whole map and the logo, without a token.
+        Route::get('site-settings', [SiteSettingController::class, 'publicMap'])->name('site-settings.index');
+        Route::get('site-settings/logo', [SiteSettingController::class, 'publicLogo'])->name('site-settings.logo');
     });
 
     // Payment gateway callbacks: public, verified by the gateway adapter (ADR-017).
@@ -444,5 +448,11 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
         Route::get('announcements/{publicAnnouncement}/cover', [PublicAnnouncementController::class, 'cover'])->whereNumber('publicAnnouncement')->name('announcements.cover');
         Route::post('announcements/{publicAnnouncement}/cover', [PublicAnnouncementController::class, 'storeCover'])->whereNumber('publicAnnouncement')->name('announcements.cover.store');
         Route::delete('announcements/{publicAnnouncement}/cover', [PublicAnnouncementController::class, 'destroyCover'])->whereNumber('publicAnnouncement')->name('announcements.cover.destroy');
+
+        // Landing-page content (texts and the brand logo), IMC administration.
+        Route::get('site-settings', [SiteSettingController::class, 'index'])->name('site-settings.index');
+        Route::patch('site-settings', [SiteSettingController::class, 'update'])->name('site-settings.update');
+        Route::post('site-settings/logo', [SiteSettingController::class, 'storeLogo'])->name('site-settings.logo.store');
+        Route::delete('site-settings/logo', [SiteSettingController::class, 'destroyLogo'])->name('site-settings.logo.destroy');
     });
 });

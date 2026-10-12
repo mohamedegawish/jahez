@@ -81,6 +81,7 @@ enum AuditEvent: string
     case AnnouncementPublished = 'announcement.published';
     case AnnouncementUnpublished = 'announcement.unpublished';
     case AnnouncementDeleted = 'announcement.deleted';
+    case SiteSettingsUpdated = 'site_settings.updated';
     case ContractDrafted = 'contract.drafted';
     case ContractCancelled = 'contract.cancelled';
     case InvoiceDrafted = 'invoice.drafted';

@@ -29,6 +29,7 @@ enum Permission: string
     case AgreementsReview = 'agreements.review';
     case PromotionsManage = 'promotions.manage';
     case AnnouncementsManage = 'announcements.manage';
+    case SiteSettingsManage = 'site_settings.manage';
     case InvoicesViewAny = 'invoices.view_any';
     case InvoicesManage = 'invoices.manage';
     case FinancialPoliciesView = 'financial_policies.view';

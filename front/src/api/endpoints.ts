@@ -41,6 +41,9 @@ import type {
   AdminAnnouncement,
   AnnouncementPayload,
   PublicAnnouncement,
+  AdminSiteSetting,
+  SiteSettingsMap,
+  SiteSettingsPayload,
   NotificationPage,
   ServiceListingPage,
   ServiceListingPackageInput,
@@ -259,6 +262,22 @@ export function createEndpoints(client: Pick<ApiClient, 'request'>) {
       removeCover: (id: number) => data(send<DataEnvelope<AdminAnnouncement>>('DELETE', `/announcements/${id}/cover`)),
       /** A draft's cover for the admin preview, read with the session token. */
       cover: (coverPath: string, signal?: AbortSignal) => file(coverPath, signal),
+    },
+
+    /** Landing-page content (texts + brand logo). `publicMap` needs no session and never triggers 401 handling. */
+    siteSettings: {
+      publicMap: (signal?: AbortSignal) =>
+        data(send<DataEnvelope<SiteSettingsMap>>('GET', '/public/site-settings', { signal, auth: false })),
+      adminList: (signal?: AbortSignal) =>
+        data(send<DataEnvelope<AdminSiteSetting[]>>('GET', '/site-settings', { signal })),
+      updateBulk: (payload: SiteSettingsPayload) =>
+        data(send<DataEnvelope<AdminSiteSetting[]>>('PATCH', '/site-settings', { body: payload })),
+      uploadLogo: (upload: File) => {
+        const form = new FormData();
+        form.append('file', upload);
+        return data(send<DataEnvelope<AdminSiteSetting>>('POST', '/site-settings/logo', { body: form }));
+      },
+      removeLogo: () => data(send<DataEnvelope<AdminSiteSetting>>('DELETE', '/site-settings/logo')),
     },
 
     /** IMC: the size of every review queue (providers, factories, listings, change requests) in one call. */

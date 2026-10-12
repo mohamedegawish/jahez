@@ -1,6 +1,7 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './auth/AuthProvider';
+import { SiteSettingsProvider } from './site/SiteSettingsProvider';
 import { RequireAuth, RequireRole } from './auth/guards';
 import { AppLayout } from './layouts/AppLayout';
 import { PublicLayout } from './layouts/PublicLayout';
@@ -31,6 +32,7 @@ import { UsersRoles } from './pages/admin/UsersRoles';
 import { AuditLogs } from './pages/admin/AuditLogs';
 import { ReadinessAdministration } from './pages/admin/ReadinessAdministration';
 import { FinancialSettings } from './pages/admin/FinancialSettings';
+import { SiteSettings } from './pages/admin/SiteSettings';
 
 // Provider Portal Pages
 import { ProviderDashboard } from './pages/provider/ProviderDashboard';
@@ -71,6 +73,7 @@ const RootRedirect: React.FC = () => {
 export const App: React.FC = () => {
   return (
     <AuthProvider>
+      <SiteSettingsProvider>
       <BrowserRouter>
         <Routes>
           {/* Public Auth Routes */}
@@ -106,6 +109,7 @@ export const App: React.FC = () => {
             <Route path="/admin/services" element={<ServicesManagement />} />
             <Route path="/admin/requests" element={<AdminRequests />} />
             <Route path="/admin/ads" element={<AdsManagement />} />
+            <Route path="/admin/site-settings" element={<SiteSettings />} />
             <Route path="/admin/contracts" element={<ContractsManagement />} />
             <Route path="/admin/reports" element={<FinancialsReports />} />
             <Route path="/admin/financial-settings" element={<FinancialSettings />} />
@@ -157,6 +161,7 @@ export const App: React.FC = () => {
           <Route path="*" element={<RootRedirect />} />
         </Routes>
       </BrowserRouter>
+      </SiteSettingsProvider>
     </AuthProvider>
   );
 };

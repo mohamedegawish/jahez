@@ -31,6 +31,9 @@ import {
   ShoppingCart,
 } from 'lucide-react';
 import logoUrl from '../../../logo.jpeg';
+import { publicApiUrl } from '../../api';
+import { useSiteSettings } from '../../site/siteSettingsContext';
+import { logoAlt, logoSrc } from '../../site/siteSettings';
 import { api } from '../../api';
 import { useAuth } from '../../auth/authContext';
 import { useApiQuery } from '../../hooks/useApiQuery';
@@ -72,6 +75,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onToggleCollapse
 }) => {
   const { user, status } = useAuth();
+  const { map, t } = useSiteSettings();
+  const brandLogo = logoSrc(map, publicApiUrl('')) ?? logoUrl;
   const location = useLocation();
   // Real server status (GET /health is public). Replaces the hard-coded uptime figure.
   // Work waiting for this user, from the API's own totals: pending provider reviews (IMC) and unanswered requests (provider).
@@ -163,7 +168,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
               { label: 'إدارة تقييم الجاهزية الرقمية', path: '/admin/readiness', icon: ClipboardCheck },
               { label: 'خطط التحول الرقمي', path: '/admin/roadmaps', icon: RouteIcon },
               { label: 'طلبات الخدمة والتفاوض', path: '/admin/requests', icon: Send },
-              { label: 'الإعلانات والحملات الترويجية', path: '/admin/ads', icon: Megaphone }
+              { label: 'الإعلانات والحملات الترويجية', path: '/admin/ads', icon: Megaphone },
+              { label: 'محتوى الصفحة الرئيسية', path: '/admin/site-settings', icon: Settings }
             ]
           },
           {
@@ -239,16 +245,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {/* Top Branding Section */}
         <div className="h-16 px-4 flex items-center justify-between border-b border-[#E6EAF0] shrink-0">
           <div className="flex items-center gap-2 min-w-0">
-            <img src={logoUrl} alt="JAHEZ" className={isCollapsed ? 'h-6 w-auto max-w-full object-contain' : 'h-8 w-auto object-contain'} />
+            <img src={brandLogo} alt={logoAlt(map, 'JAHEZ')} className={isCollapsed ? 'h-6 w-auto max-w-full object-contain' : 'h-8 w-auto object-contain'} />
 
             {/* Brand name beside the logo: جاهز + JAHEZ */}
             {!isCollapsed && (
               <div className="leading-none min-w-0">
                 <div className="text-lg font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-l from-[#5146A5] to-[#6EC8FF]">
-                  جاهز
+                  {t('header.brand_ar', 'جاهز')}
                 </div>
                 <div className="mt-1 text-[9px] font-extrabold tracking-[0.22em] text-[#667085]">
-                  JAHEZ
+                  {t('header.brand_en', 'JAHEZ')}
                 </div>
               </div>
             )}

@@ -1898,3 +1898,36 @@ export interface PlanDraftPayload {
   change_note?: string | null;
   stages: PlanDraftStagePayload[];
 }
+
+// ─── Landing-page content (texts + brand logo) ───
+
+/** SiteSettingResource for IMC administrators (GET /site-settings). */
+export interface AdminSiteSetting {
+  key: string;
+  section: string;
+  type: 'text' | 'textarea' | 'image';
+  max: number | null;
+  ar: string | null;
+  en: string | null;
+  image_url: string | null;
+  updated_at: string | null;
+}
+
+/** One entry of the public map (GET /public/site-settings). */
+export interface SiteSettingEntry {
+  type: 'text' | 'textarea' | 'image';
+  ar: string | null;
+  en: string | null;
+  image_url: string | null;
+}
+
+/** The public map keyed by setting key (`section.name`). */
+export type SiteSettingsMap = Record<string, SiteSettingEntry>;
+
+/**
+ * PATCH /site-settings payload, grouped by section so dotted keys survive
+ * validation: `{ settings: { "<section>": { "<name>": { ar, en } } } }`.
+ */
+export interface SiteSettingsPayload {
+  settings: Record<string, Record<string, { ar?: string | null; en?: string | null }>>;
+}

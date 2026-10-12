@@ -14440,6 +14440,231 @@
           "response": []
         }
       ]
+    },
+    {
+      "name": "23 Site Settings & Landing Content",
+      "description": "Landing-page texts (Arabic and English) and the brand logo. Visitors read the whole map and the logo without a token; IMC administrators (site_settings.manage) update texts in bulk and set the logo. Empty values fall back to the web client's built-in copy.",
+      "item": [
+        {
+          "name": "Public site-settings map (visitor)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test('Every key is present', function () {",
+                  "    const map = pm.response.json().data;",
+                  "    pm.expect(map['hero.title_ar'].type).to.eql('text');",
+                  "    pm.expect(map['brand.logo'].type).to.eql('image');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}{{api_prefix}}/public/site-settings",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "{{api_prefix}}",
+                "public",
+                "site-settings"
+              ]
+            },
+            "description": "Expected 200 without a token."
+          },
+          "response": []
+        },
+        {
+          "name": "Admin site-settings list",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}{{api_prefix}}/site-settings",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "{{api_prefix}}",
+                "site-settings"
+              ]
+            },
+            "description": "Expected 200 with an IMC administrator token; 401 without one, 403 for members."
+          },
+          "response": []
+        },
+        {
+          "name": "Bulk update landing texts (admin)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"settings\": {\n        \"hero\": {\n            \"title_ar\": { \"ar\": null, \"en\": null }\n        },\n        \"value\": {\n            \"title\": { \"ar\": \"Postman workshop\", \"en\": null }\n        }\n    }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}{{api_prefix}}/site-settings",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "{{api_prefix}}",
+                "site-settings"
+              ]
+            },
+            "description": "Expected 200. Settings group by section ({section: {name: {ar, en}}}); unknown keys are 422. Unchanged keys are ignored and missing from the audit."
+          },
+          "response": []
+        },
+        {
+          "name": "Upload the brand logo (admin)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": []
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}{{api_prefix}}/site-settings/logo",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "{{api_prefix}}",
+                "site-settings",
+                "logo"
+              ]
+            },
+            "description": "Expected 200. Attach a jpg, png or webp file as `file`. Served publicly at GET /public/site-settings/logo."
+          },
+          "response": []
+        },
+        {
+          "name": "Delete the brand logo (admin)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}{{api_prefix}}/site-settings/logo",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "{{api_prefix}}",
+                "site-settings",
+                "logo"
+              ]
+            },
+            "description": "Expected 200. The landing page falls back to its built-in logo."
+          },
+          "response": []
+        }
+      ]
     }
   ]
 }
